@@ -91,8 +91,11 @@ For now, clone and run locally:
                 +-----------------------+
 
 Data Pipeline
+
 IntelAlert Logic
+
 Safety Disclaimer
+
 User Flow & Screenshots (coming soon)
 
 ⚖️ ****Disclaimer****

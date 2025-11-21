@@ -52,18 +52,44 @@ RXRail is built using a modern, robust, and fully open-source foundation.
 
 📲 ****Download the App****
 
-Coming soon to:
-Android, iOS, and Flutter Web Preview
-
 For now, clone and run locally:
-git clone https://github.com/metviz/rxrailnew.git
-cd rxrailnew
-flutter pub get
-flutter run
+#  
+    git clone https://github.com/metviz/rxrailnew.git
+  
+    cd rxrailnew
+  
+    flutter pub get
+  
+    flutter run
+
 
 📘 ****Documentation****
 
-Architecture Overview
+# ****RXRail Architecture Overview****
+
+                +-----------------------+
+                |     OpenStreetMap     |
+                +-----------+-----------+
+                            |
+                            | Overpass API
+                            |
+                +-----------v-----------+
+                |   Data Processing     |
+                |  (Crossing Parsing)   |
+                +-----------+-----------+
+                            |
+                            | GPS Location Stream
+                            |
+                +-----------v-----------+
+                |  IntelAlert Engine    |
+                | (Proximity Detection) |
+                +-----------+-----------+
+                            |
+                            |
+                +-----------v-----------+
+                |   Mobile UI (Flutter) |
+                +-----------------------+
+
 Data Pipeline
 IntelAlert Logic
 Safety Disclaimer

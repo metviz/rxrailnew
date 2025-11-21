@@ -1,6 +1,7 @@
 **🚦 RXRail – Railway Proximity IntelAlert System**
 
 **Stay Alert. Stay Safe.**
+
 RXRail is a free, open-source mobile app that warns users when they’re approaching railroad tracks or crossings.
 Built with safety, awareness, and real-world impact in mind, RXRail uses real-time GPS and open mapping data to help prevent accidents caused by distraction.
 
@@ -13,6 +14,7 @@ Our goal is simple:
 **Turn awareness into safety — because one alert can save a life.**
 
 ⭐ **Key Features**
+
 🚨 **Railway Proximity IntelAlert**
 
 Real-time alerts when approaching railroad tracks or crossings, even when the app is running in the background.

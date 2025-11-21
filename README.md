@@ -19,7 +19,7 @@ Our goal is simple:
 
 Real-time alerts when approaching railroad tracks or crossings, even when the app is running in the background.
 
-📡 **Background Operation**
+📡 **Background Operation** (Ongoing Optimization ...) 
 
 RXRail continues monitoring while minimized or locked, keeping you protected at all times.
 
@@ -27,11 +27,11 @@ RXRail continues monitoring while minimized or locked, keeping you protected at 
 
 Powered by OpenStreetMap and OpenRailwayMap for global-track accuracy.
 
-👥 **Community Reporting**
+👥 **Community Reporting** (Coming soon) 
 
 Users can report missing or unsafe crossings to strengthen overall safety data.
 
-📰 **Crash News & Safety Blog**
+📰 **Crash News & Safety Tips Videos**
 
 A curated feed of railroad incident news and educational safety tips.
 
@@ -39,16 +39,18 @@ A curated feed of railroad incident news and educational safety tips.
 
 RXRail is built using a modern, robust, and fully open-source foundation.
 
-****Component  Technology****
 
-Frontend  Flutter (Dart)
-Backend  Firebase or Supabase
-Mapping  OpenStreetMap, OpenRailwayMap, Overpass API
-Routing / GPS  OSRM Engine, geolocator
-Data Feeds  FRA, NHTSA, curated news & YouTube safety sources
-Hosting  GitHub Pages / rxrail.org
+| Component         | Technology                                        |
+| ----------------- | ------------------------------------------------- |
+| **Frontend**      | Flutter (Dart)                                    |
+| **Backend**       | Firebase or Supabase                              |
+| **Mapping**       | OpenStreetMap, OpenRailwayMap, Overpass API       |
+| **Routing / GPS** | OSRM Engine, geolocator                           |
+| **Data Feeds**    | FRA, NHTSA, curated news & YouTube safety sources |
+| **Hosting**       | GitHub Pages / rxrail.org                         |
 
-📲 Download the App
+
+📲 ****Download the App****
 
 Coming soon to:
 Android, iOS, and Flutter Web Preview
@@ -59,7 +61,7 @@ cd rxrailnew
 flutter pub get
 flutter run
 
-📘 Documentation
+📘 ****Documentation****
 
 Architecture Overview
 Data Pipeline
@@ -67,7 +69,7 @@ IntelAlert Logic
 Safety Disclaimer
 User Flow & Screenshots (coming soon)
 
-⚖️ Disclaimer
+⚖️ ****Disclaimer****
 
 RXRail uses publicly available, community-sourced data.
 While we strive for accuracy, some data may be incomplete or outdated.
@@ -75,7 +77,7 @@ RXRail is intended as a **supplemental safety tool**, not a replacement for pers
 
 In emergencies, always contact the ****railroad’s posted emergency number or local authorities****.
 
-🤝 Contributing
+🤝 ****Contributing****
 
 RXRail is fully open-source and welcomes contributions.
 To get involved:
@@ -84,7 +86,7 @@ Create a branch
 Make improvements
 Submit a pull request
 
-🧡 Acknowledgments
+🧡 ****Acknowledgments****
 
 Thank you to:
 OpenStreetMap & OpenRailwayMap contributors
@@ -95,4 +97,5 @@ The Congressional App Challenge for inspiration
 🌐 **Links**
 
 🌎 **Website**: https://rxrail.org
+
 🐙 **GitHub**: https://github.com/metviz/rxrailnew

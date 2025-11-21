@@ -23,7 +23,7 @@ Real-time alerts when approaching railroad tracks or crossings, even when the ap
 
 RXRail continues monitoring while minimized or locked, keeping you protected at all times.
 
-🧭** Open Mapping Data**
+🧭**Open Mapping Data**
 
 Powered by OpenStreetMap and OpenRailwayMap for global-track accuracy.
 

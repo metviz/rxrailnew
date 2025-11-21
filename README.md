@@ -38,6 +38,7 @@ A curated feed of railroad incident news and educational safety tips.
 RXRail is built using a modern, robust, and fully open-source foundation.
 
 ****Component  Technology****
+
 Frontend  Flutter (Dart)
 Backend  Firebase or Supabase
 Mapping  OpenStreetMap, OpenRailwayMap, Overpass API
@@ -46,6 +47,7 @@ Data Feeds  FRA, NHTSA, curated news & YouTube safety sources
 Hosting  GitHub Pages / rxrail.org
 
 📲 Download the App
+
 Coming soon to:
 Android, iOS, and Flutter Web Preview
 
@@ -56,6 +58,7 @@ flutter pub get
 flutter run
 
 📘 Documentation
+
 Architecture Overview
 Data Pipeline
 IntelAlert Logic
@@ -63,6 +66,7 @@ Safety Disclaimer
 User Flow & Screenshots (coming soon)
 
 ⚖️ Disclaimer
+
 RXRail uses publicly available, community-sourced data.
 While we strive for accuracy, some data may be incomplete or outdated.
 RXRail is intended as a **supplemental safety tool**, not a replacement for personal awareness, official signage, or emergency instructions.
@@ -70,6 +74,7 @@ RXRail is intended as a **supplemental safety tool**, not a replacement for pers
 In emergencies, always contact the ****railroad’s posted emergency number or local authorities****.
 
 🤝 Contributing
+
 RXRail is fully open-source and welcomes contributions.
 To get involved:
 Fork the repository
@@ -78,6 +83,7 @@ Make improvements
 Submit a pull request
 
 🧡 Acknowledgments
+
 Thank you to:
 OpenStreetMap & OpenRailwayMap contributors
 FRA & NHTSA for public safety data
@@ -85,5 +91,6 @@ The open-source community
 The Congressional App Challenge for inspiration
 
 🌐 **Links**
+
 🌎 **Website**: https://rxrail.org
 🐙 **GitHub**: https://github.com/metviz/rxrailnew

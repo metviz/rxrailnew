@@ -1,38 +1,291 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
-  <base href="$FLUTTER_BASE_HREF">
-
-  <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
-
-  <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="cross_aware">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>cross_aware</title>
-  <link rel="manifest" href="manifest.json">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RXRail – Railway Proximity IntelAlert App</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind for Inter font and custom colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'rx-black': '#000000',
+                        'rx-yellow': '#ffc928',
+                        'rx-white': '#ffffff',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
-  <script src="flutter_bootstrap.js" async></script>
+<body class="font-sans text-rx-black">
+
+    <!-- Header & Navigation - Updated with h-30 w-30 logo and narrow height -->
+    <header class="bg-rx-black text-rx-yellow flex justify-between items-center shadow-lg sticky top-0 z-10 h-20">
+        <div class="flex items-center">
+            <!-- RXRail Logo - h-30 w-30 but header height is narrow -->
+            <img src="RX-01.svg" alt="RXRail Logo" class="h-[150px] w-[150px] text-rx-yellow -mt-4 -mb-4">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-2 pl-3">
+                <span class="font-bold text-xl text-rx-yellow">RXRail:</span>
+                <span class="text-sm sm:text-base text-rx-yellow whitespace-nowrap">Railway Proximity IntelAlert App</span>
+            </div>
+        </div>
+        <nav class="hidden md:flex space-x-6 text-sm font-semibold pr-4">
+            <a href="#mission" class="hover:text-rx-white transition duration-300">Mission</a>
+            <a href="#features" class="hover:text-rx-white transition duration-300">Features</a>
+            <a href="#tech" class="hover:text-rx-white transition duration-300">Tech Stack</a>
+            <a href="#download" class="hover:text-rx-white transition duration-300">Join</a>
+            <a href="https://github.com/metviz/rxrailnew" target="_blank" class="hover:text-rx-white transition duration-300">GitHub</a>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="bg-rx-yellow text-center py-16 px-6 md:py-24 rounded-b-xl shadow-inner">
+        <div class="max-w-4xl mx-auto">
+            <!-- Rotating Headline: Added ID and transition classes -->
+            <h2 id="rotating-headline" class="text-4xl sm:text-5xl md:text-6xl font-extrabold mb-4 leading-tight text-rx-black transition-opacity duration-700 ease-in-out opacity-100">
+                Alerts that help you see the tracks before it is too late.
+            </h2>
+            <p class="text-lg md:text-xl mb-8 max-w-2xl mx-auto">
+                RXRail is a life-saving, open-source mobile app. It uses persistent GPS monitoring and official data to proactively warn users when nearing dangerous railroad crossings or tracks, protecting you from distraction-related accidents.
+            </p>
+            <a href="https://pub-7c04751c3ba344fba1055a2b5c3e7d9d.r2.dev/rxrail_31102025.apk" class="inline-block bg-rx-black text-rx-yellow font-bold py-3 px-8 rounded-full shadow-xl hover:bg-gray-800 transition duration-300 text-lg transform hover:scale-105">
+                Download the App (Android apk)
+            </a>
+            <p class="mt-4 text-sm font-medium">Free and Open Source for iOS (Coming soon) & Android.</p>
+        </div>
+    </section>
+
+    <!-- Mission Section (Why) -->
+    <section id="mission" class="bg-rx-white py-16 px-6">
+        <div class="max-w-5xl mx-auto text-center">
+            <h3 class="text-3xl font-bold mb-4">Our Mission: Turning Loss into Life-Saving Action</h3>
+            <p class="text-xl text-gray-700 max-w-3xl mx-auto">
+                RXRail was founded in the wake of a tragic, preventable loss—a young life ended by distraction at a railroad crossing. This project is dedicated to transforming that grief into a universal, accessible safety tool. Our goal is simple: eliminate distraction-related rail accidents by providing a proactive, persistent digital guardian for everyone.
+            </p>
+        </div>
+    </section>
+
+    <!-- Features Section (What) -->
+    <section id="features" class="bg-gray-100 py-16 px-6 rounded-t-2xl shadow-inner">
+        <div class="max-w-6xl mx-auto">
+            <h3 class="text-3xl font-bold text-center mb-10">Key Safety Features</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <!-- Feature 1: Persistent Alerts -->
+                <div class="bg-rx-white p-6 rounded-xl shadow-lg border-t-4 border-rx-yellow transform hover:scale-105 transition duration-300">
+                    <div class="text-4xl mb-3 text-rx-yellow">💡</div>
+                    <h4 class="text-xl font-bold mb-2">Persistent Alerts</h4>
+                    <p class="text-gray-600">Get loud, immediate audio and haptic warnings when approaching tracks, designed to break through distraction, even when wearing headphones.</p>
+                </div>
+                <!-- Feature 2: Background Operation -->
+                <div class="bg-rx-white p-6 rounded-xl shadow-lg border-t-4 border-rx-yellow transform hover:scale-105 transition duration-300">
+                    <div class="text-4xl mb-3 text-rx-yellow">🔋</div>
+                    <h4 class="text-xl font-bold mb-2">Background Protection</h4>
+                    <p class="text-gray-600">The app uses highly optimized Geofencing to run in the background with minimal battery drain, ensuring protection is always on.</p>
+                </div>
+                <!-- Feature 3: Crash News & Awareness -->
+                <div class="bg-rx-white p-6 rounded-xl shadow-lg border-t-4 border-rx-yellow transform hover:scale-105 transition duration-300">
+                    <div class="text-4xl mb-3 text-rx-yellow">📰</div>
+                    <h4 class="text-xl font-bold mb-2">Live Railway Safety News</h4>
+                    <p class="text-gray-600">Stay informed with real-time railway safety news and alerts from Google News, providing critical awareness and education.</p>
+                </div>
+                <!-- Feature 4: Open Source & Free -->
+                <div class="bg-rx-white p-6 rounded-xl shadow-lg border-t-4 border-rx-yellow transform hover:scale-105 transition duration-300">
+                    <div class="text-4xl mb-3 text-rx-yellow">🤝</div>
+                    <h4 class="text-xl font-bold mb-2">Community Driven</h4>
+                    <p class="text-gray-600">RXRail is 100% open source and free for everyone, built by a community committed to public safety, and available on GitHub.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Live Railway News Section -->
+    <section id="news" class="bg-rx-white py-16 px-6">
+        <div class="max-w-6xl mx-auto">
+            <h3 class="text-3xl font-bold text-center mb-10">Live Railway Safety News</h3>
+            <div id="news-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- News articles will be loaded here dynamically -->
+                <div class="text-center py-8">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-rx-yellow mx-auto"></div>
+                    <p class="mt-4 text-gray-600">Loading latest railway safety news...</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tech Stack Section (How) -->
+    <section id="tech" class="bg-rx-yellow py-16 px-6">
+        <div class="max-w-5xl mx-auto text-center">
+            <h3 class="text-3xl font-bold mb-6">Built on Reliable Foundation</h3>
+            <p class="text-lg mb-8 max-w-3xl mx-auto">
+                Our technology stack prioritizes accuracy, battery efficiency, and reliability to deliver timely, life-saving warnings.
+            </p>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 items-center">
+                <div class="p-4 bg-rx-black text-rx-yellow rounded-lg font-semibold shadow-md">Flutter (Cross-Platform)</div>
+                <div class="p-4 bg-rx-black text-rx-yellow rounded-lg font-semibold shadow-md">Firebase (Cloud Functions & DB)</div>
+                <div class="p-4 bg-rx-black text-rx-yellow rounded-lg font-semibold shadow-md">OpenStreetMap, OpenRailwayMap, FRA Grade Crossing Inventory</div>
+                <div class="p-4 bg-rx-black text-rx-yellow rounded-lg font-semibold shadow-md">Native OS Geofencing APIs</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final Call to Action -->
+    <section id="download" class="bg-rx-black text-rx-yellow py-16 px-6 text-center">
+        <div class="max-w-3xl mx-auto">
+            <h3 class="text-4xl font-extrabold mb-4">Join the Safety Movement.</h3>
+            <p class="text-xl mb-8">
+                Help us test, share, and improve this critical tool. Every contributor helps us get closer to zero preventable rail crossing accidents.
+            </p>
+            <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
+                <a href="https://github.com/metviz/rxrailnew" target="_blank" class="inline-block bg-rx-yellow text-rx-black font-bold py-3 px-8 rounded-full shadow-2xl hover:bg-rx-white transition duration-300 text-lg transform hover:scale-105">
+                    View Code on GitHub
+                </a>
+                <a href="deck.html" class="inline-block border-2 border-rx-yellow text-rx-yellow font-bold py-3 px-8 rounded-full shadow-2xl hover:bg-gray-900 transition duration-300 text-lg transform hover:scale-105">
+                    Read the Full Story
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-400 p-6 text-center text-sm">
+        <p class="mb-2">© 2025 RXRail Project. All rights reserved.</p>
+        <p>
+            <a href="deck.html#news" class="hover:text-rx-yellow mx-2">Disclaimer & Terms</a> |
+            <a href="mailto:contact@rxrail.org" class="hover:text-rx-yellow mx-2">Contact</a> |
+            <a href="https://github.com/metviz/rxrailnew/blob/main/LICENSE" target="_blank" class="hover:text-rx-yellow mx-2">Open Source MIT License</a>
+        </p>
+    </footer>
+
+    <!-- JavaScript for Rotating Headlines -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const headlines = [
+                "Alerts that help you see the tracks before it is too late.",
+                "Turn awareness into safety.",
+                "RXRail helps you stay aware near railroad crossings."
+            ];
+            const headlineElement = document.getElementById('rotating-headline');
+            let currentIndex = 0;
+            const cycleInterval = 4000; // Time each headline is visible (4 seconds)
+            const fadeDuration = 700; // Matches Tailwind transition duration
+
+            function rotateHeadline() {
+                // 1. Fade out (Opacity 0)
+                headlineElement.classList.remove('opacity-100');
+                headlineElement.classList.add('opacity-0');
+
+                // Wait for fade out to complete before changing text
+                setTimeout(() => {
+                    // 2. Change text (cycle to the next index)
+                    currentIndex = (currentIndex + 1) % headlines.length;
+                    headlineElement.textContent = headlines[currentIndex];
+
+                    // 3. Fade in (Opacity 100)
+                    headlineElement.classList.remove('opacity-0');
+                    headlineElement.classList.add('opacity-100');
+                }, fadeDuration);
+            }
+
+            // Start the rotation loop (initial text is already set in HTML)
+            setInterval(rotateHeadline, cycleInterval);
+
+            // Load Google News for railway safety
+            loadRailwayNews();
+        });
+
+        // Function to load railway safety news from Google News RSS
+        async function loadRailwayNews() {
+            const newsContainer = document.getElementById('news-container');
+            
+            try {
+                // Using a CORS proxy to avoid cross-origin issues
+                const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+                const targetUrl = 'https://news.google.com/rss/search?q=railway+safety+railroad+crossing+accident&hl=en-US&gl=US&ceid=US:en';
+                
+                const response = await fetch(proxyUrl + targetUrl);
+                const text = await response.text();
+                
+                // Parse the RSS XML
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(text, "text/xml");
+                const items = xmlDoc.getElementsByTagName("item");
+                
+                // Clear loading indicator
+                newsContainer.innerHTML = '';
+                
+                // Display up to 6 news articles
+                for (let i = 0; i < Math.min(6, items.length); i++) {
+                    const item = items[i];
+                    const title = item.getElementsByTagName("title")[0].textContent;
+                    const link = item.getElementsByTagName("link")[0].textContent;
+                    const pubDate = item.getElementsByTagName("pubDate")[0]?.textContent || '';
+                    const description = item.getElementsByTagName("description")[0]?.textContent || '';
+                    
+                    // Format date
+                    const date = new Date(pubDate);
+                    const formattedDate = date.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    });
+                    
+                    // Create news card
+                    const newsCard = document.createElement('div');
+                    newsCard.className = 'bg-rx-white p-6 rounded-xl shadow-lg border-t-4 border-rx-yellow hover:shadow-xl transition duration-300';
+                    newsCard.innerHTML = `
+                        <h4 class="text-lg font-bold mb-2 line-clamp-2">${title}</h4>
+                        <p class="text-sm text-gray-500 mb-3">${formattedDate}</p>
+                        <p class="text-gray-600 text-sm mb-4 line-clamp-3">${description.replace(/<[^>]*>/g, '')}</p>
+                        <a href="${link}" target="_blank" class="inline-block text-rx-yellow font-semibold text-sm hover:text-rx-black transition duration-300">
+                            Read more →
+                        </a>
+                    `;
+                    
+                    newsContainer.appendChild(newsCard);
+                }
+                
+                // If no articles found
+                if (items.length === 0) {
+                    newsContainer.innerHTML = `
+                        <div class="col-span-3 text-center py-8">
+                            <p class="text-gray-600">No recent railway safety news found. Please check back later.</p>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Error loading news:', error);
+                newsContainer.innerHTML = `
+                    <div class="col-span-3 text-center py-8">
+                        <p class="text-gray-600">Unable to load news at this time. Please check your connection or try again later.</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+
+    <style>
+        /* Add line clamp utility for text truncation */
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+    </style>
 </body>
 </html>

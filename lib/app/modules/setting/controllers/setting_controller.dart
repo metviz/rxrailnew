@@ -10,7 +10,7 @@ class SettingController extends GetxController {
   final runInBackground = false.obs;
   // Warnings Section
   final RxBool isWarningsEnabled = true.obs;
-  final RxDouble warningDistance = 300.0.obs; // in meters
+  final RxDouble warningDistance = 200.0.obs; // in meters
 
   // Warning Method Section
   final RxBool isWarningSoundEnabled = true.obs;
@@ -33,7 +33,7 @@ class SettingController extends GetxController {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     isWarningsEnabled.value = prefs.getBool('isWarningsEnabled') ?? true;
-    warningDistance.value = prefs.getDouble('warningDistance') ?? 300.0;
+    warningDistance.value = prefs.getDouble('warningDistance') ?? 200.0;
     isWarningSoundEnabled.value = prefs.getBool('isWarningSoundEnabled') ?? true;
     isVibrationEnabled.value = prefs.getBool('isVibrationEnabled') ?? true;
     distanceUnit.value = prefs.getString('distanceUnit') ?? 'miles';

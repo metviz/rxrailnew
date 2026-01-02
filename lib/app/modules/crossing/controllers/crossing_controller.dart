@@ -36,7 +36,7 @@ import 'dart:developer' as log_print;
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) {
     switch (task) {
-      case 'checkNearbyCrossings'://9257036604
+      case 'checkNearbyCrossings': //9257036604
         return _performBackgroundLocationCheck(inputData);
       case 'locationUpdate':
         return _handleLocationUpdate(inputData);
@@ -135,7 +135,6 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     super.onReady();
     initializeOnPageOpen();
   }
-
 
   // Future<void> downloadOfflineMap({required double radiusMiles}) async {
   //   if (userPosition.value == null) {
@@ -292,6 +291,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     }
     return null;
   }
+
   Future<void> downloadOfflineMapByCurrentState() async {
     if (userPosition.value == null) {
       Get.snackbar(
@@ -388,6 +388,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     // 🗺️ Step 3: Download tiles for detected state
     await downloadOfflineMapForState(currentStateCode);
   }
+
   // Future<void> downloadOfflineMapForState(String stateCode) async {
   //   final Map<String, LatLngBounds> stateBounds = {
   //     'AL': LatLngBounds(LatLng(30.2, -88.5), LatLng(35.0, -84.9)),
@@ -606,7 +607,10 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
                 ),
                 TextButton(
                   onPressed: () => Get.back(result: true),
-                  child: Text("Re-download", style: TextStyle(color: Colors.red)),
+                  child: Text(
+                    "Re-download",
+                    style: TextStyle(color: Colors.red),
+                  ),
                 ),
               ],
             ),
@@ -659,7 +663,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       await _downloadSubscription?.cancel();
 
       _downloadSubscription = progressStream.listen(
-            (DownloadProgress prog) {
+        (DownloadProgress prog) {
           _lastStreamUpdate = DateTime.now();
           downloadedTiles.value = prog.successfulTiles;
           totalTiles.value = prog.maxTiles;
@@ -669,10 +673,10 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
             offlineMapDownloadProgress.value = percent;
 
             log_print.log(
-                "📥 ${DateTime.now().toString().split(' ')[1]} - "
-                    "${percent.toStringAsFixed(1)}% - "
-                    "${prog.successfulTiles}/${prog.maxTiles} tiles - "
-                    "Background: $_isAppInBackground"
+              "📥 ${DateTime.now().toString().split(' ')[1]} - "
+              "${percent.toStringAsFixed(1)}% - "
+              "${prog.successfulTiles}/${prog.maxTiles} tiles - "
+              "Background: $_isAppInBackground",
             );
           }
         },
@@ -689,12 +693,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
       // ✅ START MONITORING TIMER - This ensures updates even when stream pauses
       _startDownloadMonitorTimer(stateCode);
-
     } catch (e) {
       log_print.log("❌ Download initialization error: $e");
       _cleanupDownload(stateCode, isError: true, error: e.toString());
     }
   }
+
   // ✅ Start periodic notification updates
   void _startDownloadMonitorTimer(String stateCode) {
     _downloadMonitorTimer?.cancel();
@@ -707,13 +711,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       }
 
       final now = DateTime.now();
-      final timeSinceLastUpdate = now.difference(_lastStreamUpdate ?? now).inSeconds;
+      final timeSinceLastUpdate =
+          now.difference(_lastStreamUpdate ?? now).inSeconds;
 
       log_print.log(
-          "🔄 Monitor tick: ${offlineMapDownloadProgress.value.toStringAsFixed(1)}% - "
-              "${downloadedTiles.value}/${totalTiles.value} tiles - "
-              "Last update: ${timeSinceLastUpdate}s ago - "
-              "Background: $_isAppInBackground"
+        "🔄 Monitor tick: ${offlineMapDownloadProgress.value.toStringAsFixed(1)}% - "
+        "${downloadedTiles.value}/${totalTiles.value} tiles - "
+        "Last update: ${timeSinceLastUpdate}s ago - "
+        "Background: $_isAppInBackground",
       );
 
       // ✅ Update foreground notification
@@ -732,7 +737,6 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     log_print.log("✅ Download monitor timer started");
   }
-
 
   // void _stopDownloadNotificationTimer() {
   //   log_print.log("🛑 Stopping notification timer");
@@ -776,12 +780,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //   }
   // }
   Future<void> _cleanupDownload(
-      String stateCode, {
-        bool isComplete = false,
-        bool isError = false,
-        bool isCancelled = false,
-        String? error,
-      }) async {
+    String stateCode, {
+    bool isComplete = false,
+    bool isError = false,
+    bool isCancelled = false,
+    String? error,
+  }) async {
     log_print.log("🧹 Cleaning up download...");
 
     _downloadMonitorTimer?.cancel();
@@ -801,13 +805,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (isComplete) {
       offlineMapDownloadProgress.value = 100.0;
 
-      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'offline_map_complete',
-        'Download Complete',
-        importance: Importance.high,
-        priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
-      );
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+            'offline_map_complete',
+            'Download Complete',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          );
 
       const NotificationDetails notificationDetails = NotificationDetails(
         android: androidDetails,
@@ -831,13 +836,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
       await checkOfflineMapAvailability();
     } else if (isError) {
-      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'offline_map_error',
-        'Download Error',
-        importance: Importance.high,
-        priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
-      );
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+            'offline_map_error',
+            'Download Error',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          );
 
       const NotificationDetails notificationDetails = NotificationDetails(
         android: androidDetails,
@@ -850,13 +856,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         notificationDetails,
       );
     } else if (isCancelled) {
-      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'offline_map_cancelled',
-        'Download Cancelled',
-        importance: Importance.low,
-        priority: Priority.low,
-        icon: '@mipmap/ic_launcher',
-      );
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+            'offline_map_cancelled',
+            'Download Cancelled',
+            importance: Importance.low,
+            priority: Priority.low,
+            icon: '@mipmap/ic_launcher',
+          );
 
       const NotificationDetails notificationDetails = NotificationDetails(
         android: androidDetails,
@@ -870,41 +877,44 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       );
     }
   }
+
   // ✅ Update notification with progress
   Future<void> _updateDownloadProgressNotification(
-      String stateCode,
-      double percent,
-      int downloaded,
-      int total,
-      ) async {
+    String stateCode,
+    double percent,
+    int downloaded,
+    int total,
+  ) async {
     try {
       final percentInt = percent.toInt();
 
       log_print.log(
-          "📢 Updating notification: $percentInt% - $downloaded/$total tiles"
+        "📢 Updating notification: $percentInt% - $downloaded/$total tiles",
       );
 
-      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'offline_map_download',
-        'Offline Map Download',
-        channelDescription: 'Shows progress of offline map download',
-        importance: Importance.low,
-        priority: Priority.low,
-        ongoing: true,
-        autoCancel: false,
-        showProgress: true,
-        maxProgress: 100,
-        progress: percentInt,
-        enableLights: false,
-        enableVibration: false,
-        playSound: false,
-        icon: '@mipmap/ic_launcher',
-        onlyAlertOnce: true,
-        visibility: NotificationVisibility.public, // ✅ Show on lock screen
-        channelShowBadge: false,
-      );
+      final AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+            'offline_map_download',
+            'Offline Map Download',
+            channelDescription: 'Shows progress of offline map download',
+            importance: Importance.low,
+            priority: Priority.low,
+            ongoing: true,
+            autoCancel: false,
+            showProgress: true,
+            maxProgress: 100,
+            progress: percentInt,
+            enableLights: false,
+            enableVibration: false,
+            playSound: false,
+            icon: '@mipmap/ic_launcher',
+            onlyAlertOnce: true,
+            visibility: NotificationVisibility.public,
+            // ✅ Show on lock screen
+            channelShowBadge: false,
+          );
 
-       NotificationDetails notificationDetails = NotificationDetails(
+      NotificationDetails notificationDetails = NotificationDetails(
         android: androidDetails,
       );
 
@@ -920,6 +930,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       log_print.log("❌ Notification update error: $e");
     }
   }
+
   // ✅ Updated cancel method
   Future<void> cancelOfflineMapDownload() async {
     if (!isDownloadingOfflineMap.value) return;
@@ -945,168 +956,169 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       log_print.log("Error cancelling download: $e");
     }
   }
-//   // ✅ Show completion notification
-//   Future<void> _showDownloadCompleteNotification(String stateCode, int tiles) async {
-//     try {
-//       const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-//         'offline_map_download_complete',
-//         'Download Complete',
-//         channelDescription: 'Notification when download completes',
-//         importance: Importance.high,
-//         priority: Priority.high,
-//         ongoing: false,
-//         autoCancel: true,
-//         enableLights: true,
-//         enableVibration: true,
-//         playSound: true,
-//         icon: '@mipmap/ic_launcher',
-//       );
-//
-//       const NotificationDetails notificationDetails = NotificationDetails(
-//         android: androidDetails,
-//       );
-//
-//       // Cancel ongoing notification
-//       await flutterLocalNotificationsPlugin.cancel(999);
-//
-//       // Show completion notification
-//       await flutterLocalNotificationsPlugin.show(
-//         998,
-//         "✅ Download Complete",
-//         "$stateCode offline map ready! ($tiles tiles downloaded)",
-//         notificationDetails,
-//       );
-//     } catch (e) {
-//       log_print.log("Completion notification error: $e");
-//     }
-//   }
-// // ✅ Show error notification
-//   Future<void> _showDownloadErrorNotification(String stateCode, String error) async {
-//     try {
-//       const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-//         'offline_map_download_error',
-//         'Download Error',
-//         channelDescription: 'Notification when download fails',
-//         importance: Importance.high,
-//         priority: Priority.high,
-//         ongoing: false,
-//         autoCancel: true,
-//         enableLights: true,
-//         enableVibration: true,
-//         playSound: true,
-//         icon: '@mipmap/ic_launcher',
-//       );
-//
-//       const NotificationDetails notificationDetails = NotificationDetails(
-//         android: androidDetails,
-//       );
-//
-//       // Cancel ongoing notification
-//       await flutterLocalNotificationsPlugin.cancel(999);
-//
-//       // Show error notification
-//       await flutterLocalNotificationsPlugin.show(
-//         997,
-//         "❌ Download Failed",
-//         "$stateCode map download failed: $error",
-//         notificationDetails,
-//       );
-//     } catch (e) {
-//       log_print.log("Error notification error: $e");
-//     }
-//   }
-//   // ✅ Cancel download
-//   Future<void> cancelOfflineMapDownload() async {
-//     if (!isDownloadingOfflineMap.value) return;
-//
-//     try {
-//       _stopDownloadNotificationTimer();
-//
-//       await _downloadSubscription?.cancel();
-//       _downloadSubscription = null;
-//
-//       if (_currentDownloadingState != null) {
-//         final store = FMTCStore('offline_tiles_$_currentDownloadingState');
-//         await store.download.cancel();
-//       }
-//
-//       isDownloadingOfflineMap.value = false;
-//       final cancelledState = _currentDownloadingState;
-//       _currentDownloadingState = null;
-//       offlineMapDownloadProgress.value = 0.0;
-//
-//       // Clear notifications
-//       await flutterLocalNotificationsPlugin.cancel(999);
-//
-//       // Show cancellation notification
-//       const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-//         'offline_map_download_cancelled',
-//         'Download Cancelled',
-//         importance: Importance.low,
-//         priority: Priority.low,
-//         autoCancel: true,
-//         icon: '@mipmap/ic_launcher',
-//       );
-//
-//       const NotificationDetails notificationDetails = NotificationDetails(
-//         android: androidDetails,
-//       );
-//
-//       await flutterLocalNotificationsPlugin.show(
-//         996,
-//         "Download Cancelled",
-//         "$cancelledState map download cancelled",
-//         notificationDetails,
-//       );
-//
-//       Get.snackbar(
-//         "Download Cancelled",
-//         "Offline map download has been cancelled",
-//         backgroundColor: Colors.orange,
-//         colorText: Colors.white,
-//       );
-//     } catch (e) {
-//       log_print.log("Error cancelling download: $e");
-//     }
-//   }
-//   Future<void> _updateDownloadNotification(
-//       String stateCode,
-//       double percent,
-//       int downloaded,
-//       int total,
-//       int remaining,
-//       ) async {
-//     try {
-//        AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-//         'offline_map_download',
-//         'Offline Map Download',
-//         channelDescription: 'Shows progress of offline map download',
-//         importance: Importance.low,
-//         priority: Priority.low,
-//         ongoing: true, // ✅ Makes notification persistent
-//         autoCancel: false,
-//         showProgress: true,
-//         maxProgress: 100,
-//         progress: percent.toInt(),
-//         enableLights: false,
-//         enableVibration: false,
-//         icon: '@mipmap/ic_launcher',
-//       );
-//
-//        NotificationDetails notificationDetails = NotificationDetails(
-//         android: androidDetails,
-//       );
-//
-//       await flutterLocalNotificationsPlugin.show(
-//         999, // Unique ID for download notifications
-//         "Downloading $stateCode Map",
-//         "${percent.toStringAsFixed(1)}% • $downloaded/$total tiles",
-//         notificationDetails,
-//       );
-//     } catch (e) {
-//       log_print.log("Notification error: $e");
-//     }
-//   }
+
+  //   // ✅ Show completion notification
+  //   Future<void> _showDownloadCompleteNotification(String stateCode, int tiles) async {
+  //     try {
+  //       const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+  //         'offline_map_download_complete',
+  //         'Download Complete',
+  //         channelDescription: 'Notification when download completes',
+  //         importance: Importance.high,
+  //         priority: Priority.high,
+  //         ongoing: false,
+  //         autoCancel: true,
+  //         enableLights: true,
+  //         enableVibration: true,
+  //         playSound: true,
+  //         icon: '@mipmap/ic_launcher',
+  //       );
+  //
+  //       const NotificationDetails notificationDetails = NotificationDetails(
+  //         android: androidDetails,
+  //       );
+  //
+  //       // Cancel ongoing notification
+  //       await flutterLocalNotificationsPlugin.cancel(999);
+  //
+  //       // Show completion notification
+  //       await flutterLocalNotificationsPlugin.show(
+  //         998,
+  //         "✅ Download Complete",
+  //         "$stateCode offline map ready! ($tiles tiles downloaded)",
+  //         notificationDetails,
+  //       );
+  //     } catch (e) {
+  //       log_print.log("Completion notification error: $e");
+  //     }
+  //   }
+  // // ✅ Show error notification
+  //   Future<void> _showDownloadErrorNotification(String stateCode, String error) async {
+  //     try {
+  //       const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+  //         'offline_map_download_error',
+  //         'Download Error',
+  //         channelDescription: 'Notification when download fails',
+  //         importance: Importance.high,
+  //         priority: Priority.high,
+  //         ongoing: false,
+  //         autoCancel: true,
+  //         enableLights: true,
+  //         enableVibration: true,
+  //         playSound: true,
+  //         icon: '@mipmap/ic_launcher',
+  //       );
+  //
+  //       const NotificationDetails notificationDetails = NotificationDetails(
+  //         android: androidDetails,
+  //       );
+  //
+  //       // Cancel ongoing notification
+  //       await flutterLocalNotificationsPlugin.cancel(999);
+  //
+  //       // Show error notification
+  //       await flutterLocalNotificationsPlugin.show(
+  //         997,
+  //         "❌ Download Failed",
+  //         "$stateCode map download failed: $error",
+  //         notificationDetails,
+  //       );
+  //     } catch (e) {
+  //       log_print.log("Error notification error: $e");
+  //     }
+  //   }
+  //   // ✅ Cancel download
+  //   Future<void> cancelOfflineMapDownload() async {
+  //     if (!isDownloadingOfflineMap.value) return;
+  //
+  //     try {
+  //       _stopDownloadNotificationTimer();
+  //
+  //       await _downloadSubscription?.cancel();
+  //       _downloadSubscription = null;
+  //
+  //       if (_currentDownloadingState != null) {
+  //         final store = FMTCStore('offline_tiles_$_currentDownloadingState');
+  //         await store.download.cancel();
+  //       }
+  //
+  //       isDownloadingOfflineMap.value = false;
+  //       final cancelledState = _currentDownloadingState;
+  //       _currentDownloadingState = null;
+  //       offlineMapDownloadProgress.value = 0.0;
+  //
+  //       // Clear notifications
+  //       await flutterLocalNotificationsPlugin.cancel(999);
+  //
+  //       // Show cancellation notification
+  //       const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+  //         'offline_map_download_cancelled',
+  //         'Download Cancelled',
+  //         importance: Importance.low,
+  //         priority: Priority.low,
+  //         autoCancel: true,
+  //         icon: '@mipmap/ic_launcher',
+  //       );
+  //
+  //       const NotificationDetails notificationDetails = NotificationDetails(
+  //         android: androidDetails,
+  //       );
+  //
+  //       await flutterLocalNotificationsPlugin.show(
+  //         996,
+  //         "Download Cancelled",
+  //         "$cancelledState map download cancelled",
+  //         notificationDetails,
+  //       );
+  //
+  //       Get.snackbar(
+  //         "Download Cancelled",
+  //         "Offline map download has been cancelled",
+  //         backgroundColor: Colors.orange,
+  //         colorText: Colors.white,
+  //       );
+  //     } catch (e) {
+  //       log_print.log("Error cancelling download: $e");
+  //     }
+  //   }
+  //   Future<void> _updateDownloadNotification(
+  //       String stateCode,
+  //       double percent,
+  //       int downloaded,
+  //       int total,
+  //       int remaining,
+  //       ) async {
+  //     try {
+  //        AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+  //         'offline_map_download',
+  //         'Offline Map Download',
+  //         channelDescription: 'Shows progress of offline map download',
+  //         importance: Importance.low,
+  //         priority: Priority.low,
+  //         ongoing: true, // ✅ Makes notification persistent
+  //         autoCancel: false,
+  //         showProgress: true,
+  //         maxProgress: 100,
+  //         progress: percent.toInt(),
+  //         enableLights: false,
+  //         enableVibration: false,
+  //         icon: '@mipmap/ic_launcher',
+  //       );
+  //
+  //        NotificationDetails notificationDetails = NotificationDetails(
+  //         android: androidDetails,
+  //       );
+  //
+  //       await flutterLocalNotificationsPlugin.show(
+  //         999, // Unique ID for download notifications
+  //         "Downloading $stateCode Map",
+  //         "${percent.toStringAsFixed(1)}% • $downloaded/$total tiles",
+  //         notificationDetails,
+  //       );
+  //     } catch (e) {
+  //       log_print.log("Notification error: $e");
+  //     }
+  //   }
   Future<bool> checkIfOfflineMapExists(String stateCode) async {
     try {
       final store = FMTCStore('offline_tiles_$stateCode');
@@ -1126,6 +1138,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       return false;
     }
   }
+
   Future<bool> isOfflineMapAvailable() async {
     try {
       final stateCode = await getCurrentStateCode();
@@ -1144,6 +1157,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       return false;
     }
   }
+
   // Add observable variable
   final hasOfflineMap = false.obs;
   StreamSubscription<DownloadProgress>? _downloadSubscription;
@@ -1155,6 +1169,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   Timer? _downloadMonitorTimer;
   bool _isAppInBackground = false;
   DateTime? _lastStreamUpdate;
+
   // Timer? _downloadNotificationTimer;
   // int _lastNotifiedPercent = 0;
   // bool _isAppInBackground = false;
@@ -1163,26 +1178,26 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   // final offlineMapDownloadProgress = 0.0.obs;
   // final offlineMapTileCount = 0.obs;
   // final offlineMapSize = 0.0.obs;
-// ✅ Initialize foreground service
+  // ✅ Initialize foreground service
   Future<void> _initForegroundService() async {
     fg.FlutterForegroundTask.init(
-      androidNotificationOptions:  fg.AndroidNotificationOptions(
+      androidNotificationOptions: fg.AndroidNotificationOptions(
         channelId: 'offline_map_download',
         channelName: 'Offline Map Download',
         channelDescription: 'Shows progress of offline map download',
-        channelImportance:  fg.NotificationChannelImportance.LOW,
-        priority:  fg.NotificationPriority.LOW,
-        iconData: const  fg.NotificationIconData(
-          resType:  fg.ResourceType.mipmap,
-          resPrefix:  fg.ResourcePrefix.ic,
+        channelImportance: fg.NotificationChannelImportance.LOW,
+        priority: fg.NotificationPriority.LOW,
+        iconData: const fg.NotificationIconData(
+          resType: fg.ResourceType.mipmap,
+          resPrefix: fg.ResourcePrefix.ic,
           name: 'launcher',
         ),
       ),
-      iosNotificationOptions: const  fg.IOSNotificationOptions(
+      iosNotificationOptions: const fg.IOSNotificationOptions(
         showNotification: true,
         playSound: false,
       ),
-      foregroundTaskOptions: const  fg.ForegroundTaskOptions(
+      foregroundTaskOptions: const fg.ForegroundTaskOptions(
         interval: 2000, // Update every 2 seconds
         autoRunOnBoot: false,
         allowWakeLock: true,
@@ -1191,40 +1206,43 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     );
   }
 
-// ✅ Start foreground service
+  // ✅ Start foreground service
   Future<void> _startDownloadForegroundService(String stateCode) async {
-    if (await  fg.FlutterForegroundTask.isRunningService) {
-      await  fg.FlutterForegroundTask.restartService();
+    if (await fg.FlutterForegroundTask.isRunningService) {
+      await fg.FlutterForegroundTask.restartService();
     } else {
-      await  fg.FlutterForegroundTask.startService(
+      await fg.FlutterForegroundTask.startService(
         notificationTitle: 'Downloading $stateCode Map',
         notificationText: 'Starting download...',
       );
     }
   }
 
-// ✅ Update foreground notification
+  // ✅ Update foreground notification
   Future<void> _updateForegroundNotification(
-      String stateCode,
-      double percent,
-      int downloaded,
-      int total,
-      ) async {
-    await  fg.FlutterForegroundTask.updateService(
+    String stateCode,
+    double percent,
+    int downloaded,
+    int total,
+  ) async {
+    await fg.FlutterForegroundTask.updateService(
       notificationTitle: '📥 Downloading $stateCode Map',
-      notificationText: '${percent.toStringAsFixed(0)}% • $downloaded/$total tiles',
+      notificationText:
+          '${percent.toStringAsFixed(0)}% • $downloaded/$total tiles',
     );
   }
 
-// ✅ Stop foreground service
+  // ✅ Stop foreground service
   Future<void> _stopDownloadForegroundService() async {
-    await  fg.FlutterForegroundTask.stopService();
+    await fg.FlutterForegroundTask.stopService();
   }
-// Check on init
+
+  // Check on init
   Future<void> checkOfflineMapAvailability() async {
     hasOfflineMap.value = await isOfflineMapAvailable();
   }
-  void initializeOnPageOpen() async{
+
+  void initializeOnPageOpen() async {
     log_print.log("🔄 Initializing location on page open");
 
     // Check if location tracking is already active
@@ -1315,76 +1333,79 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       _initLocationTracking();
     }
   }
-//08/10/2025
-//   Future<void> initializeLocationServices() async {
-//     log_print.log(
-//       "📡 [CrossingController] initializeLocationServices() started",
-//     );
-//     // ✅ Step 0: Permission check first
-//     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-//     if (!serviceEnabled) {
-//       Get.snackbar(
-//         "Location Service Off",
-//         "Please enable location services to continue",
-//         snackPosition: SnackPosition.BOTTOM,
-//       );
-//       return;
-//     }
-//
-//     LocationPermission permission = await Geolocator.checkPermission();
-//     if (permission == LocationPermission.denied) {
-//       permission = await Geolocator.requestPermission();
-//     }
-//
-//     if (permission != LocationPermission.always &&
-//         permission != LocationPermission.whileInUse) {
-//       Get.snackbar(
-//         "Permission Required",
-//         "Please allow location permission to use navigation",
-//         snackPosition: SnackPosition.BOTTOM,
-//       );
-//       return; // ❌ Stop here, don't run next steps
-//     }
-//     try {
-//       log_print.log("⚙️ Step 1: Initializing background service...");
-//       await _backgroundService.initialize();
-//       log_print.log("✅ Step 1: Background service initialized");
-//
-//       log_print.log("🔔 Step 2: Initializing notification service...");
-//       await NotificationService().init();
-//       log_print.log("✅ Step 2: Notification service initialized");
-//
-//       log_print.log("🎧 Step 3: Initializing audio...");
-//       await _initAudio();
-//       log_print.log("✅ Step 3: Audio initialized");
-//
-//       log_print.log("🛰️ Step 4: Starting location tracking FIRST...");
-//       await _initLocationTracking();
-//       log_print.log("✅ Step 4: Location tracking started");
-//
-//       log_print.log("📍 Step 5: Fetching initial location...");
-//       await fetchInitialLocation();
-//       log_print.log("✅ Step 5: Initial location fetched");
-//
-//       log_print.log("📦 Step 6: Loading preferences...");
-//       _loadPreferences();
-//       log_print.log("✅ Step 6: Preferences loaded");
-//
-//       log_print.log("🔄 Step 7: Registering background tasks...");
-//       _registerBackgroundTasks();
-//       log_print.log("✅ Step 7: Background tasks registered");
-//
-//       log_print.log(
-//         "✅ [CrossingController] initializeLocationServices() complete",
-//       );
-//     } catch (e) {
-//       errorMessage.value = "Failed to initialize services: $e";
-//       log_print.log("⚠ Service initialization error: $e");
-//     }
-//   }
-//08/10/2025 new
+
+  //08/10/2025
+  //   Future<void> initializeLocationServices() async {
+  //     log_print.log(
+  //       "📡 [CrossingController] initializeLocationServices() started",
+  //     );
+  //     // ✅ Step 0: Permission check first
+  //     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+  //     if (!serviceEnabled) {
+  //       Get.snackbar(
+  //         "Location Service Off",
+  //         "Please enable location services to continue",
+  //         snackPosition: SnackPosition.BOTTOM,
+  //       );
+  //       return;
+  //     }
+  //
+  //     LocationPermission permission = await Geolocator.checkPermission();
+  //     if (permission == LocationPermission.denied) {
+  //       permission = await Geolocator.requestPermission();
+  //     }
+  //
+  //     if (permission != LocationPermission.always &&
+  //         permission != LocationPermission.whileInUse) {
+  //       Get.snackbar(
+  //         "Permission Required",
+  //         "Please allow location permission to use navigation",
+  //         snackPosition: SnackPosition.BOTTOM,
+  //       );
+  //       return; // ❌ Stop here, don't run next steps
+  //     }
+  //     try {
+  //       log_print.log("⚙️ Step 1: Initializing background service...");
+  //       await _backgroundService.initialize();
+  //       log_print.log("✅ Step 1: Background service initialized");
+  //
+  //       log_print.log("🔔 Step 2: Initializing notification service...");
+  //       await NotificationService().init();
+  //       log_print.log("✅ Step 2: Notification service initialized");
+  //
+  //       log_print.log("🎧 Step 3: Initializing audio...");
+  //       await _initAudio();
+  //       log_print.log("✅ Step 3: Audio initialized");
+  //
+  //       log_print.log("🛰️ Step 4: Starting location tracking FIRST...");
+  //       await _initLocationTracking();
+  //       log_print.log("✅ Step 4: Location tracking started");
+  //
+  //       log_print.log("📍 Step 5: Fetching initial location...");
+  //       await fetchInitialLocation();
+  //       log_print.log("✅ Step 5: Initial location fetched");
+  //
+  //       log_print.log("📦 Step 6: Loading preferences...");
+  //       _loadPreferences();
+  //       log_print.log("✅ Step 6: Preferences loaded");
+  //
+  //       log_print.log("🔄 Step 7: Registering background tasks...");
+  //       _registerBackgroundTasks();
+  //       log_print.log("✅ Step 7: Background tasks registered");
+  //
+  //       log_print.log(
+  //         "✅ [CrossingController] initializeLocationServices() complete",
+  //       );
+  //     } catch (e) {
+  //       errorMessage.value = "Failed to initialize services: $e";
+  //       log_print.log("⚠ Service initialization error: $e");
+  //     }
+  //   }
+  //08/10/2025 new
   Future<void> initializeLocationServices() async {
-    log_print.log("📡 [CrossingController] initializeLocationServices() started");
+    log_print.log(
+      "📡 [CrossingController] initializeLocationServices() started",
+    );
 
     // ✅ Step 0: Permission check FIRST
     try {
@@ -1481,6 +1502,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     log_print.log("✅✅✅ [CrossingController] INITIALIZATION COMPLETE ✅✅✅");
   }
+
   Future<void> fetchInitialLocation() async {
     try {
       log_print.log("📍 Fetching initial location...");
@@ -1540,8 +1562,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
         if (isDownloadingOfflineMap.value) {
           log_print.log(
-              "📥 Download status: ${offlineMapDownloadProgress.value.toStringAsFixed(1)}% - "
-                  "${downloadedTiles.value}/${totalTiles.value}"
+            "📥 Download status: ${offlineMapDownloadProgress.value.toStringAsFixed(1)}% - "
+            "${downloadedTiles.value}/${totalTiles.value}",
           );
         }
         _onAppResumed();
@@ -1552,8 +1574,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
         if (isDownloadingOfflineMap.value) {
           log_print.log(
-              "📥 Download active: ${offlineMapDownloadProgress.value.toStringAsFixed(1)}% - "
-                  "${downloadedTiles.value}/${totalTiles.value}"
+            "📥 Download active: ${offlineMapDownloadProgress.value.toStringAsFixed(1)}% - "
+            "${downloadedTiles.value}/${totalTiles.value}",
           );
         }
       case AppLifecycleState.inactive:
@@ -1591,7 +1613,9 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     _updateBackgroundNotification();
 
-    log_print.log("✅ Background mode active, location stream: ${_positionStream != null ? 'RUNNING' : 'NULL'}");
+    log_print.log(
+      "✅ Background mode active, location stream: ${_positionStream != null ? 'RUNNING' : 'NULL'}",
+    );
     debugLocationStream(); // Log initial state
   }
 
@@ -1604,7 +1628,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       _registerBackgroundTasks();
     }
   }
-//13/10/2025
+
+  //13/10/2025
   // Save current location to SharedPreferences for background use
   // Future<void> _saveLocationToPrefs() async {
   //   if (userPosition.value != null) {
@@ -1668,32 +1693,42 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
       // ✅ Save route coordinates if navigating
       if (isNavigating.value && routeCoordinates.isNotEmpty) {
-        final routeJson = routeCoordinates
-            .map((coord) => {'lat': coord.latitude, 'lng': coord.longitude})
-            .toList();
+        final routeJson =
+            routeCoordinates
+                .map((coord) => {'lat': coord.latitude, 'lng': coord.longitude})
+                .toList();
         await prefs.setString('routeCoordinates', json.encode(routeJson));
 
         // Save crossings along route
-        final crossingsJson = crossingsAlongRoute
-            .map((loc) => {
-          'latitude': loc.latitude,
-          'longitude': loc.longitude,
-          'street': loc.street,
-          'totalswitchingtrains': loc.totalswitchingtrains,
-        })
-            .toList();
-        await prefs.setString('crossingsAlongRoute', json.encode(crossingsJson));
+        final crossingsJson =
+            crossingsAlongRoute
+                .map(
+                  (loc) => {
+                    'latitude': loc.latitude,
+                    'longitude': loc.longitude,
+                    'street': loc.street,
+                    'totalswitchingtrains': loc.totalswitchingtrains,
+                  },
+                )
+                .toList();
+        await prefs.setString(
+          'crossingsAlongRoute',
+          json.encode(crossingsJson),
+        );
       }
 
       // Save nearby locations data
-      final locationsJson = nearbyLocations
-          .map((loc) => {
-        'latitude': loc.latitude,
-        'longitude': loc.longitude,
-        'street': loc.street,
-        'totalswitchingtrains': loc.totalswitchingtrains,
-      })
-          .toList();
+      final locationsJson =
+          nearbyLocations
+              .map(
+                (loc) => {
+                  'latitude': loc.latitude,
+                  'longitude': loc.longitude,
+                  'street': loc.street,
+                  'totalswitchingtrains': loc.totalswitchingtrains,
+                },
+              )
+              .toList();
       await prefs.setString('nearbyLocations', json.encode(locationsJson));
 
       // Save settings
@@ -1719,6 +1754,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       );
     }
   }
+
   Future<void> _initAudio() async {
     final session = await AudioSession.instance;
     await session.configure(AudioSessionConfiguration.music());
@@ -2357,12 +2393,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       return true;
     }
 
-    final distance = _calculateDistance(
-      _lastSignificantPosition!.latitude,
-      _lastSignificantPosition!.longitude,
-      newPosition.latitude,
-      newPosition.longitude,
-    ) * 1000; // meters
+    final distance =
+        _calculateDistance(
+          _lastSignificantPosition!.latitude,
+          _lastSignificantPosition!.longitude,
+          newPosition.latitude,
+          newPosition.longitude,
+        ) *
+        1000; // meters
 
     final timeDiff = DateTime.now().difference(_lastUpdateTime!).inSeconds;
 
@@ -2382,13 +2420,18 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (shouldUpdate) {
       _lastSignificantPosition = newPosition;
       _lastUpdateTime = DateTime.now();
-      log_print.log('✅ Movement accepted: ${distance.toStringAsFixed(1)}m, ${timeDiff}s');
+      log_print.log(
+        '✅ Movement accepted: ${distance.toStringAsFixed(1)}m, ${timeDiff}s',
+      );
     } else {
-      log_print.log('⏸️ Movement rejected: ${distance.toStringAsFixed(1)}m, ${timeDiff}s');
+      log_print.log(
+        '⏸️ Movement rejected: ${distance.toStringAsFixed(1)}m, ${timeDiff}s',
+      );
     }
 
     return shouldUpdate;
   }
+
   // void _updateMapPosition(Position position) {
   //   isProgrammaticMove.value = true;
   //   mapController.move(
@@ -2560,7 +2603,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //     distanceToNearestCrossing.value = minDistance;
   //   }
   // }
-//08/10/2025
+  //08/10/2025
   Future<void> checkNearbyCrossings() async {
     log_print.log('╔══════════════════════════════════════╗');
     log_print.log('║  checkNearbyCrossings() - START     ║');
@@ -2582,10 +2625,16 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       userPosition.value!.longitude,
     );
 
-    log_print.log('📍 User Location: ${userLatLng.latitude}, ${userLatLng.longitude}');
+    log_print.log(
+      '📍 User Location: ${userLatLng.latitude}, ${userLatLng.longitude}',
+    );
     log_print.log('📢 Total crossings to check: ${nearbyLocations.length}');
-    log_print.log('⚠️  Warning distance: ${settingController.warningDistance.value}m');
-    log_print.log('🔔 Warnings enabled: ${settingController.isWarningsEnabled.value}');
+    log_print.log(
+      '⚠️  Warning distance: ${settingController.warningDistance.value}m',
+    );
+    log_print.log(
+      '🔔 Warnings enabled: ${settingController.isWarningsEnabled.value}',
+    );
     log_print.log('─────────────────────────────────────');
 
     TransportLocation? closest;
@@ -2602,16 +2651,18 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         continue;
       }
 
-      final distance = _calculateDistance(
-        userLatLng.latitude,
-        userLatLng.longitude,
-        crossingLat,
-        crossingLng,
-      ) * 1000; // meters
+      final distance =
+          _calculateDistance(
+            userLatLng.latitude,
+            userLatLng.longitude,
+            crossingLat,
+            crossingLng,
+          ) *
+          1000; // meters
 
       log_print.log(
         '📍 Crossing ${i + 1}/${nearbyLocations.length}: '
-            '${crossing.street ?? "Unknown"} - ${distance.toStringAsFixed(1)}m',
+        '${crossing.street ?? "Unknown"} - ${distance.toStringAsFixed(1)}m',
       );
 
       if (distance < minDistance) {
@@ -2634,13 +2685,16 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       nearestCrossing.value = closest;
       distanceToNearestCrossing.value = minDistance;
       log_print.log('─────────────────────────────────────');
-      log_print.log('✅ Nearest: ${closest.street} at ${minDistance.toStringAsFixed(1)}m');
+      log_print.log(
+        '✅ Nearest: ${closest.street} at ${minDistance.toStringAsFixed(1)}m',
+      );
     }
 
     log_print.log('─────────────────────────────────────');
     log_print.log('📊 SUMMARY: ${alertCount} alerts triggered');
     log_print.log('╚══════════════════════════════════════╝');
   }
+
   Future<void> fetchUserLocation() async {
     try {
       isLoading.value = true;
@@ -3473,9 +3527,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (userPosition.value == null) return;
 
     // ✅ Check crossings even if crossingsAlongRoute is empty (app might have restarted)
-    final crossingsToCheck = crossingsAlongRoute.isNotEmpty
-        ? crossingsAlongRoute
-        : nearbyLocations;
+    final crossingsToCheck =
+        crossingsAlongRoute.isNotEmpty ? crossingsAlongRoute : nearbyLocations;
 
     if (crossingsToCheck.isEmpty) return;
     if (!settingController.isWarningsEnabled.value) return;
@@ -3494,12 +3547,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
       if (crossingLat == 0 || crossingLng == 0) continue;
 
-      final distance = _calculateDistance(
-        userLatLng.latitude,
-        userLatLng.longitude,
-        crossingLat,
-        crossingLng,
-      ) * 1000;
+      final distance =
+          _calculateDistance(
+            userLatLng.latitude,
+            userLatLng.longitude,
+            crossingLat,
+            crossingLng,
+          ) *
+          1000;
 
       if (distance < minDistance) {
         minDistance = distance;
@@ -3508,7 +3563,9 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
       // Trigger alert within threshold
       if (distance < settingController.warningDistance.value) {
-        log_print.log("🔔 Proximity alert: ${crossing.street} at ${distance.toStringAsFixed(1)}m");
+        log_print.log(
+          "🔔 Proximity alert: ${crossing.street} at ${distance.toStringAsFixed(1)}m",
+        );
         await _triggerProximityAlert(crossing, distance);
       }
     }
@@ -3519,11 +3576,13 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       distanceToNearestCrossing.value = minDistance;
 
       // ✅ Update background notification with nearest crossing
-      if (!Get.context!.mounted) { // App is in background
+      if (!Get.context!.mounted) {
+        // App is in background
         await _updateBackgroundNotification();
       }
     }
   }
+
   String distanceTemp = '';
   List<String> distanceLogs = [];
   String routeProgressStart = 'Update route progress';
@@ -4537,18 +4596,28 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       _announceStepIfNeeded(step, closestStepIndex, distanceToStep);
     }
   }
-  double _calculateDistanceToStep(LatLng userPosition, Map<String, dynamic> step) {
+
+  double _calculateDistanceToStep(
+    LatLng userPosition,
+    Map<String, dynamic> step,
+  ) {
     final stepLocation = _extractStepLocation(step);
     if (stepLocation == null) return -1;
 
     return _calculateDistance(
-      userPosition.latitude,
-      userPosition.longitude,
-      stepLocation.latitude,
-      stepLocation.longitude,
-    ) * 1000;
+          userPosition.latitude,
+          userPosition.longitude,
+          stepLocation.latitude,
+          stepLocation.longitude,
+        ) *
+        1000;
   }
-  void _announceStepIfNeeded(Map<String, dynamic> step, int stepIndex, double distance) {
+
+  void _announceStepIfNeeded(
+    Map<String, dynamic> step,
+    int stepIndex,
+    double distance,
+  ) {
     final stepKey = stepIndex.toString();
     final maneuverType = _getManeuverType(step);
 
@@ -4557,10 +4626,10 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       return;
     }
 
-    
-
     // Announce at 200m for significant turns
-    if (distance <= 200 && distance > 50 && !_announcedTurns.containsKey(stepKey)) {
+    if (distance <= 200 &&
+        distance > 50 &&
+        !_announcedTurns.containsKey(stepKey)) {
       final instruction = _getTurnInstruction(step);
       speak("$instruction in 200 meters");
       _announcedTurns[stepKey] = true;
@@ -4574,6 +4643,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       log_print.log("🔊 Voice: Now $instruction");
     }
   }
+
   String _getManeuverType(Map<String, dynamic> step) {
     final maneuver = step['maneuver'] as Map?;
     if (maneuver != null && maneuver['type'] is String) {
@@ -4590,7 +4660,9 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       final modifier = (maneuver['modifier'] as String? ?? '').toLowerCase();
 
       // Handle specific turn types
-      if (type.contains('turn') || type.contains('merge') || type.contains('fork')) {
+      if (type.contains('turn') ||
+          type.contains('merge') ||
+          type.contains('fork')) {
         if (modifier.contains('left')) return "turn left";
         if (modifier.contains('right')) return "turn right";
         if (modifier.contains('slight left')) return "slight left";
@@ -4615,6 +4687,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     return "continue";
   }
+
   int _findClosestStepIndex(LatLng userPosition) {
     double minDistance = double.infinity;
     int closestIndex = -1;
@@ -4625,12 +4698,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
       if (stepLocation == null) continue;
 
-      final distance = _calculateDistance(
-        userPosition.latitude,
-        userPosition.longitude,
-        stepLocation.latitude,
-        stepLocation.longitude,
-      ) * 1000;
+      final distance =
+          _calculateDistance(
+            userPosition.latitude,
+            userPosition.longitude,
+            stepLocation.latitude,
+            stepLocation.longitude,
+          ) *
+          1000;
 
       if (distance < minDistance) {
         minDistance = distance;
@@ -4676,7 +4751,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         final intersections = step['intersections'] as List;
         if (intersections.isNotEmpty) {
           final firstIntersection = intersections[0] as Map;
-          if (firstIntersection['location'] != null && firstIntersection['location'] is List) {
+          if (firstIntersection['location'] != null &&
+              firstIntersection['location'] is List) {
             final loc = firstIntersection['location'] as List;
             if (loc.length >= 2) {
               return LatLng(
@@ -4693,6 +4769,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     return null;
   }
+
   String _formatManeuver(Map<String, dynamic> step) {
     final type = ((step['instruction'] as String?) ?? '').toLowerCase();
     final mod = ((step['modifier'] as String?) ?? '').toLowerCase();
@@ -5164,19 +5241,581 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //         ),
   //   );
   // }
+  // void showRouteBottomSheet(BuildContext context) {
+  //   final toController = TextEditingController(text: destinationAddress.value);
+  //   final RxBool isLoading = false.obs;
+  //   final RxString locationDetails = ''.obs;
+  //   final RxList<place_mark.Location> locationSuggestions =
+  //       <place_mark.Location>[].obs;
+  //   final RxString currentLocationText = 'Getting location...'.obs;
+  //
+  //   // Function to update location details
+  //   Future<void> updateLocationSuggestions(String query) async {
+  //     if (query.isEmpty) {
+  //       locationSuggestions.clear();
+  //       return;
+  //     }
+  //
+  //     try {
+  //       final locations = await place_mark.locationFromAddress(query);
+  //       locationSuggestions.assignAll(locations);
+  //     } catch (e) {
+  //       locationSuggestions.clear();
+  //     }
+  //   }
+  //
+  //   // Function to refresh current location and update display
+  //   Future<void> refreshCurrentLocationInSheet() async {
+  //     try {
+  //       currentLocationText.value = 'Refreshing location...';
+  //
+  //       // Refresh the location using your existing method
+  //       await refreshCurrentLocation();
+  //
+  //       // Get address for display
+  //       if (userPosition.value != null) {
+  //         final placemarks = await geocoding.placemarkFromCoordinates(
+  //           userPosition.value!.latitude,
+  //           userPosition.value!.longitude,
+  //         );
+  //
+  //         if (placemarks.isNotEmpty) {
+  //           final place = placemarks.first;
+  //           currentLocationText.value =
+  //               "${place.street ?? ''}, ${place.locality ?? ''}, ${place.administrativeArea ?? ''}";
+  //         } else {
+  //           currentLocationText.value =
+  //               "Lat: ${userPosition.value!.latitude.toStringAsFixed(4)}, "
+  //               "Lng: ${userPosition.value!.longitude.toStringAsFixed(4)}";
+  //         }
+  //       }
+  //     } catch (e) {
+  //       currentLocationText.value = 'Error getting location';
+  //       log_print.log('Error refreshing location in sheet: $e');
+  //     }
+  //   }
+  //
+  //   // Initialize current location display when sheet opens
+  //   WidgetsBinding.instance.addPostFrameCallback((_) {
+  //     refreshCurrentLocationInSheet();
+  //   });
+  //
+  //   // If there's already a destination, load its details
+  //   if (destinationAddress.value.isNotEmpty) {
+  //     updateLocationSuggestions(destinationAddress.value);
+  //   }
+  //
+  //   showModalBottomSheet(
+  //     context: context,
+  //     isScrollControlled: true,
+  //     backgroundColor: Colors.transparent,
+  //     builder:
+  //         (context) => Container(
+  //           height: MediaQuery.of(context).size.height * 0.9,
+  //           decoration: BoxDecoration(
+  //             color: Colors.white,
+  //             borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
+  //             boxShadow: [
+  //               BoxShadow(
+  //                 color: Colors.black.withValues(alpha: 0.1),
+  //                 blurRadius: 10,
+  //                 spreadRadius: 2,
+  //               ),
+  //             ],
+  //           ),
+  //           child: Column(
+  //             children: [
+  //               // Handle bar
+  //               Container(
+  //                 width: 40.w,
+  //                 height: 4.h,
+  //                 margin: EdgeInsets.symmetric(vertical: 12.h),
+  //                 decoration: BoxDecoration(
+  //                   color: Colors.grey[300],
+  //                   borderRadius: BorderRadius.circular(2.r),
+  //                 ),
+  //               ),
+  //
+  //               // Header
+  //               Padding(
+  //                 padding: EdgeInsets.symmetric(horizontal: 20.w),
+  //                 child: Row(
+  //                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //                   children: [
+  //                     Text(
+  //                       "Find Route",
+  //                       style: styleW700(size: 20.sp, color: Colors.black),
+  //                     ),
+  //                     IconButton(
+  //                       onPressed: () => Navigator.pop(context),
+  //                       icon: Icon(Icons.close, size: 24.sp),
+  //                       style: IconButton.styleFrom(
+  //                         backgroundColor: Colors.grey[100],
+  //                         shape: CircleBorder(),
+  //                       ),
+  //                     ),
+  //                   ],
+  //                 ),
+  //               ),
+  //
+  //               Divider(color: Colors.grey[200], thickness: 1),
+  //
+  //               // Content
+  //               Expanded(
+  //                 child: SingleChildScrollView(
+  //                   keyboardDismissBehavior:
+  //                       ScrollViewKeyboardDismissBehavior.onDrag,
+  //                   padding: EdgeInsets.only(
+  //                     left: 20.w,
+  //                     right: 20.w,
+  //                     top: 20.h,
+  //                     bottom: MediaQuery.of(context).viewInsets.bottom + 20.h,
+  //                   ),
+  //                   child: Column(
+  //                     crossAxisAlignment: CrossAxisAlignment.start,
+  //                     children: [
+  //                       // Current location indicator with refresh button
+  //                       Container(
+  //                         padding: EdgeInsets.all(16.w),
+  //                         decoration: BoxDecoration(
+  //                           color: Color(0xFFFFC107).withValues(alpha: 0.05),
+  //                           borderRadius: BorderRadius.circular(12.r),
+  //                           border: Border.all(
+  //                             color: Color(0xFFFFC107),
+  //                             width: 1.5,
+  //                           ),
+  //                         ),
+  //                         child: Row(
+  //                           children: [
+  //                             Icon(
+  //                               Icons.my_location,
+  //                               color: Colors.blue,
+  //                               size: 20.sp,
+  //                             ),
+  //                             SizedBox(width: 8.w),
+  //                             Expanded(
+  //                               child: Column(
+  //                                 crossAxisAlignment: CrossAxisAlignment.start,
+  //                                 children: [
+  //                                   Text(
+  //                                     "Starting Point",
+  //                                     style: styleW600(
+  //                                       size: 12.sp,
+  //                                       color: Colors.grey[600],
+  //                                     ),
+  //                                   ),
+  //                                   SizedBox(height: 4.h),
+  //                                   Obx(
+  //                                     () => Text(
+  //                                       currentLocationText.value,
+  //                                       style: styleW500(
+  //                                         size: 13.sp,
+  //                                         color: Colors.black87,
+  //                                       ),
+  //                                       maxLines: 2,
+  //                                       overflow: TextOverflow.ellipsis,
+  //                                     ),
+  //                                   ),
+  //                                 ],
+  //                               ),
+  //                             ),
+  //                             SizedBox(width: 8.w),
+  //                             IconButton(
+  //                               onPressed:
+  //                                   () => refreshCurrentLocationInSheet(),
+  //                               icon: Icon(Icons.refresh, size: 20.sp),
+  //                               style: IconButton.styleFrom(
+  //                                 backgroundColor: Colors.blue.withValues(
+  //                                   alpha: 0.1,
+  //                                 ),
+  //                                 shape: CircleBorder(),
+  //                               ),
+  //                               tooltip: 'Refresh location',
+  //                             ),
+  //                           ],
+  //                         ),
+  //                       ),
+  //
+  //                       SizedBox(height: 20.h),
+  //
+  //                       // To address input
+  //                       Text(
+  //                         "Destination",
+  //                         style: styleW600(size: 16.sp, color: Colors.black87),
+  //                       ),
+  //                       SizedBox(height: 8.h),
+  //                       Container(
+  //                         decoration: BoxDecoration(
+  //                           borderRadius: BorderRadius.circular(12.r),
+  //                           border: Border.all(color: Colors.grey[300]!),
+  //                           color: Colors.grey[50],
+  //                         ),
+  //                         child: TextField(
+  //                           controller: toController,
+  //                           decoration: InputDecoration(
+  //                             hintText: "Enter destination address",
+  //                             hintStyle: styleW400(
+  //                               size: 14.sp,
+  //                               color: Colors.grey[500],
+  //                             ),
+  //                             prefixIcon: Container(
+  //                               padding: EdgeInsets.all(12.w),
+  //                               child: CircleAvatar(
+  //                                 radius: 6.r,
+  //                                 backgroundColor: Colors.red,
+  //                               ),
+  //                             ),
+  //                             border: InputBorder.none,
+  //                             contentPadding: EdgeInsets.symmetric(
+  //                               horizontal: 16.w,
+  //                               vertical: 16.h,
+  //                             ),
+  //                           ),
+  //                           style: styleW500(
+  //                             size: 14.sp,
+  //                             color: Colors.black87,
+  //                           ),
+  //                           onChanged: (value) async {
+  //                             if (value.length > 5) {
+  //                               await updateLocationSuggestions(value);
+  //                             }
+  //                           },
+  //                         ),
+  //                       ),
+  //
+  //                       // Location details preview
+  //                       Obx(
+  //                         () =>
+  //                             locationSuggestions.isNotEmpty
+  //                                 ? Container(
+  //                                   constraints: BoxConstraints(
+  //                                     maxHeight: 200.h,
+  //                                   ),
+  //                                   child: ListView.builder(
+  //                                     shrinkWrap: true,
+  //                                     itemCount: locationSuggestions.length,
+  //                                     itemBuilder: (context, index) {
+  //                                       final location =
+  //                                           locationSuggestions[index];
+  //
+  //                                       return FutureBuilder<
+  //                                         List<geocoding.Placemark>
+  //                                       >(
+  //                                         future: geocoding
+  //                                             .placemarkFromCoordinates(
+  //                                               location.latitude,
+  //                                               location.longitude,
+  //                                             ),
+  //                                         builder: (context, snapshot) {
+  //                                           if (!snapshot.hasData) {
+  //                                             return SizedBox();
+  //                                           }
+  //
+  //                                           final placeMark =
+  //                                               snapshot.data!.first;
+  //                                           final address =
+  //                                               "${placeMark.street ?? ''}, ${placeMark.locality ?? ''}, ${placeMark.administrativeArea ?? ''}";
+  //
+  //                                           return ListTile(
+  //                                             leading: Icon(
+  //                                               Icons.location_on,
+  //                                               color: Color(0xFFFFC107),
+  //                                             ),
+  //                                             title: Text(
+  //                                               address,
+  //                                               style: styleW500(size: 12.sp),
+  //                                             ),
+  //                                             onTap: () {
+  //                                               toController.text = address;
+  //                                               locationDetails.value = address;
+  //                                               locationSuggestions.clear();
+  //                                               FocusScope.of(
+  //                                                 context,
+  //                                               ).unfocus();
+  //                                             },
+  //                                           );
+  //                                         },
+  //                                       );
+  //                                     },
+  //                                   ),
+  //                                 )
+  //                                 : SizedBox(),
+  //                       ),
+  //
+  //                       SizedBox(height: 30.h),
+  //
+  //                       // Info card
+  //                       Container(
+  //                         padding: EdgeInsets.all(16.w),
+  //                         decoration: BoxDecoration(
+  //                           color: Colors.orange.withValues(alpha: 0.1),
+  //                           borderRadius: BorderRadius.circular(12.r),
+  //                           border: Border.all(
+  //                             color: Colors.orange.withValues(alpha: 0.3),
+  //                           ),
+  //                         ),
+  //                         child: Row(
+  //                           children: [
+  //                             Icon(
+  //                               Icons.info_outline,
+  //                               color: Colors.orange,
+  //                               size: 20.sp,
+  //                             ),
+  //                             SizedBox(width: 12.w),
+  //                             Expanded(
+  //                               child: Text(
+  //                                 "We'll check for railway crossings along your route and provide safety alerts.",
+  //                                 style: styleW400(
+  //                                   size: 13.sp,
+  //                                   color: Colors.orange[800],
+  //                                 ),
+  //                               ),
+  //                             ),
+  //                           ],
+  //                         ),
+  //                       ),
+  //
+  //                       SizedBox(height: 30.h),
+  //                     ],
+  //                   ),
+  //                 ),
+  //               ),
+  //
+  //               // Bottom action buttons
+  //               Container(
+  //                 padding: EdgeInsets.all(20.w),
+  //                 decoration: BoxDecoration(
+  //                   color: Colors.white,
+  //                   border: Border(top: BorderSide(color: Colors.grey[200]!)),
+  //                 ),
+  //                 child: Obx(
+  //                   () => Column(
+  //                     children: [
+  //                       // Find Route Button
+  //                       SizedBox(
+  //                         width: double.infinity,
+  //                         height: 50.h,
+  //                         child: ElevatedButton(
+  //                           onPressed:
+  //                               isLoading.value
+  //                                   ? null
+  //                                   : () async {
+  //                                     if (toController.text.trim().isEmpty) {
+  //                                       _showSnackBar(
+  //                                         context,
+  //                                         "Please enter destination address",
+  //                                         isError: true,
+  //                                       );
+  //                                       return;
+  //                                     }
+  //
+  //                                     isLoading.value = true;
+  //
+  //                                     try {
+  //                                       await findRoute(
+  //                                         toController.text.trim(),
+  //                                       );
+  //                                       isLoading.value = false;
+  //                                       Navigator.pop(context);
+  //                                       speak("Route found. Ready to navigate");
+  //                                     } catch (e) {
+  //                                       isLoading.value = false;
+  //                                       _showSnackBar(
+  //                                         context,
+  //                                         "Error: ${e.toString()}",
+  //                                         isError: true,
+  //                                       );
+  //                                     }
+  //                                   },
+  //                           style: ElevatedButton.styleFrom(
+  //                             backgroundColor: Color(0xFFFFC107),
+  //                             foregroundColor: AppColors.black,
+  //                             elevation: 0,
+  //                             shape: RoundedRectangleBorder(
+  //                               borderRadius: BorderRadius.circular(12.r),
+  //                             ),
+  //                           ),
+  //                           child:
+  //                               isLoading.value
+  //                                   ? Row(
+  //                                     mainAxisAlignment:
+  //                                         MainAxisAlignment.center,
+  //                                     children: [
+  //                                       SizedBox(
+  //                                         width: 20.w,
+  //                                         height: 20.h,
+  //                                         child: CircularProgressIndicator(
+  //                                           strokeWidth: 2,
+  //                                           valueColor:
+  //                                               AlwaysStoppedAnimation<Color>(
+  //                                                 Colors.white,
+  //                                               ),
+  //                                         ),
+  //                                       ),
+  //                                       SizedBox(width: 12.w),
+  //                                       Text(
+  //                                         "Finding Route...",
+  //                                         style: styleW600(
+  //                                           size: 16.sp,
+  //                                           color: AppColors.black,
+  //                                         ),
+  //                                       ),
+  //                                     ],
+  //                                   )
+  //                                   : Row(
+  //                                     mainAxisAlignment:
+  //                                         MainAxisAlignment.center,
+  //                                     children: [
+  //                                       Icon(Icons.directions, size: 20.sp),
+  //                                       SizedBox(width: 8.w),
+  //                                       Text(
+  //                                         "Find Route",
+  //                                         style: styleW600(
+  //                                           size: 16.sp,
+  //                                           color: AppColors.black,
+  //                                         ),
+  //                                       ),
+  //                                     ],
+  //                                   ),
+  //                         ),
+  //                       ),
+  //
+  //                       SizedBox(height: 12.h),
+  //
+  //                       // Cancel Button
+  //                       SizedBox(
+  //                         width: double.infinity,
+  //                         height: 50.h,
+  //                         child: OutlinedButton(
+  //                           onPressed:
+  //                               isLoading.value
+  //                                   ? null
+  //                                   : () => Navigator.pop(context),
+  //                           style: OutlinedButton.styleFrom(
+  //                             side: BorderSide(color: Colors.grey[300]!),
+  //                             shape: RoundedRectangleBorder(
+  //                               borderRadius: BorderRadius.circular(12.r),
+  //                             ),
+  //                           ),
+  //                           child: Text(
+  //                             "Cancel",
+  //                             style: styleW500(
+  //                               size: 16.sp,
+  //                               color: Colors.grey[600],
+  //                             ),
+  //                           ),
+  //                         ),
+  //                       ),
+  //                     ],
+  //                   ),
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //   );
+  // }
+  // Add these constants at the top of your controller class
+  final RxInt selectedTabIndex = 0.obs;
+  final RxList<String> recentSearches = <String>[].obs;
+  final homeAddresses = <String>[].obs;
+  final workAddresses = <String>[].obs;
+
+  // Method to save addresses to SharedPreferences
+  Future<void> _saveAddresses() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // 🟢 Save recent searches
+    await prefs.setStringList('recentSearches', recentSearches);
+
+    // 🟢 Save home addresses list
+    if (homeAddresses.isNotEmpty) {
+      await prefs.setStringList('homeAddresses', homeAddresses);
+    } else {
+      await prefs.remove('homeAddresses'); // remove if empty
+    }
+
+    // 🟢 Save work addresses list
+    if (workAddresses.isNotEmpty) {
+      await prefs.setStringList('workAddresses', workAddresses);
+    } else {
+      await prefs.remove('workAddresses'); // remove if empty
+    }
+  }
+
+  // Method to load addresses from SharedPreferences
+  Future<void> _loadAddresses() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // 🟢 Load lists
+    recentSearches.assignAll(prefs.getStringList('recentSearches') ?? []);
+    homeAddresses.assignAll(prefs.getStringList('homeAddresses') ?? []);
+    workAddresses.assignAll(prefs.getStringList('workAddresses') ?? []);
+  }
+
+  // Add to recent searches
+  void _addToRecentSearches(String address) {
+    if (address.trim().isEmpty) return;
+
+    // Remove if already exists
+    recentSearches.removeWhere(
+      (item) => item.toLowerCase() == address.toLowerCase(),
+    );
+
+    // Add to beginning
+    recentSearches.insert(0, address);
+
+    // Keep only last 10
+    if (recentSearches.length > 10) {
+      recentSearches.removeRange(10, recentSearches.length);
+    }
+
+    _saveAddresses();
+  }
+
+  // Delete from recent searches
+  void _deleteRecentSearch(int index) {
+    recentSearches.removeAt(index);
+    _saveAddresses();
+  }
+
+  // Clear all recent searches
+  void _clearRecentSearches() {
+    recentSearches.clear();
+    _saveAddresses();
+  }
+
   void showRouteBottomSheet(BuildContext context) {
+    // Load saved addresses
+    _loadAddresses();
+
     final toController = TextEditingController(text: destinationAddress.value);
     final RxBool isLoading = false.obs;
-    final RxString locationDetails = ''.obs;
     final RxList<place_mark.Location> locationSuggestions =
         <place_mark.Location>[].obs;
     final RxString currentLocationText = 'Getting location...'.obs;
 
-    // Function to update location details
+    // Controllers for home/work dialogs
+    final homeController = TextEditingController();
+    final workController = TextEditingController();
+
+    // Warning visibility below destination input
+    final RxBool showDestinationWarning = false.obs;
+    final RxString destinationWarningText =
+        'Please enter a more specific address (min 5 characters)'.obs;
+
     Future<void> updateLocationSuggestions(String query) async {
       if (query.isEmpty) {
         locationSuggestions.clear();
+        showDestinationWarning.value = true;
         return;
+      }
+
+      // Show warning if very short
+      if (query.trim().length < 5) {
+        showDestinationWarning.value = true;
+      } else {
+        showDestinationWarning.value = false;
       }
 
       try {
@@ -5187,15 +5826,11 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       }
     }
 
-    // Function to refresh current location and update display
     Future<void> refreshCurrentLocationInSheet() async {
       try {
         currentLocationText.value = 'Refreshing location...';
-
-        // Refresh the location using your existing method
         await refreshCurrentLocation();
 
-        // Get address for display
         if (userPosition.value != null) {
           final placemarks = await geocoding.placemarkFromCoordinates(
             userPosition.value!.latitude,
@@ -5214,16 +5849,112 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         }
       } catch (e) {
         currentLocationText.value = 'Error getting location';
-        log_print.log('Error refreshing location in sheet: $e');
+        log_print.log('Error refreshing location: $e');
       }
     }
 
-    // Initialize current location display when sheet opens
+    // Show dialog to add/edit home address
+    void showHomeAddressDialog({int? editIndex}) {
+      final controller = TextEditingController(
+        text: editIndex != null ? homeAddresses[editIndex] : '',
+      );
+
+      Get.dialog(
+        AlertDialog(
+          title: Text(
+            editIndex != null ? "Edit Home Address" : "Add Home Address",
+          ),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              hintText: "Enter home address",
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            if (editIndex != null)
+              TextButton(
+                onPressed: () {
+                  homeAddresses.removeAt(editIndex);
+                  _saveAddresses();
+                  Get.back();
+                },
+                child: Text("Delete", style: TextStyle(color: Colors.red)),
+              ),
+            TextButton(onPressed: Get.back, child: Text("Cancel")),
+            ElevatedButton(
+              onPressed: () {
+                final text = controller.text.trim();
+                if (text.isNotEmpty) {
+                  if (editIndex != null) {
+                    homeAddresses[editIndex] = text;
+                  } else {
+                    homeAddresses.insert(0, text);
+                  }
+                  _saveAddresses();
+                  Get.back();
+                }
+              },
+              child: Text("Save"),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show dialog to add/edit work address
+    void showWorkAddressDialog({int? editIndex}) {
+      final controller = TextEditingController(
+        text: editIndex != null ? workAddresses[editIndex] : '',
+      );
+
+      Get.dialog(
+        AlertDialog(
+          title: Text(
+            editIndex != null ? "Edit Work Address" : "Add Work Address",
+          ),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              hintText: "Enter work address",
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            if (editIndex != null)
+              TextButton(
+                onPressed: () {
+                  workAddresses.removeAt(editIndex);
+                  _saveAddresses();
+                  Get.back();
+                },
+                child: Text("Delete", style: TextStyle(color: Colors.red)),
+              ),
+            TextButton(onPressed: Get.back, child: Text("Cancel")),
+            ElevatedButton(
+              onPressed: () {
+                final text = controller.text.trim();
+                if (text.isNotEmpty) {
+                  if (editIndex != null) {
+                    workAddresses[editIndex] = text;
+                  } else {
+                    workAddresses.insert(0, text);
+                  }
+                  _saveAddresses();
+                  Get.back();
+                }
+              },
+              child: Text("Save"),
+            ),
+          ],
+        ),
+      );
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       refreshCurrentLocationInSheet();
     });
 
-    // If there's already a destination, load its details
     if (destinationAddress.value.isNotEmpty) {
       updateLocationSuggestions(destinationAddress.value);
     }
@@ -5259,80 +5990,222 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
                   ),
                 ),
 
-                // Header
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20.w),
+                // Header with gradient background
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 12.w,
+                    vertical: 8.h,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0xFFFFC107).withValues(alpha: 0.1),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        "Find Route",
-                        style: styleW700(size: 20.sp, color: Colors.black),
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(10.w),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFFFC107), Color(0xFFFFD54F)],
+                              ),
+                              borderRadius: BorderRadius.circular(12.r),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Color(
+                                    0xFFFFC107,
+                                  ).withValues(alpha: 0.4),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.explore,
+                              color: Colors.white,
+                              size: 20.sp,
+                            ),
+                          ),
+                          SizedBox(width: 12.w),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Find Your Route",
+                                style: styleW600(
+                                  size: 20.sp,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              Text(
+                                "Safe journey ahead",
+                                style: styleW400(
+                                  size: 12.sp,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: Icon(Icons.close, size: 24.sp),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.grey[100],
-                          shape: CircleBorder(),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: Icon(Icons.close, size: 20.sp),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            shape: CircleBorder(),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                Divider(color: Colors.grey[200], thickness: 1),
-
+                // Divider(color: Colors.grey[200], thickness: 1),
+                // Animated divider
+                Container(
+                  height: 2,
+                  margin: EdgeInsets.symmetric(horizontal: 20.w),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.transparent,
+                        Color(0xFFFFC107).withValues(alpha: 0.5),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
                 // Content
                 Expanded(
                   child: SingleChildScrollView(
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: EdgeInsets.only(
-                      left: 20.w,
-                      right: 20.w,
+                      left: 12.w,
+                      right: 12.w,
                       top: 20.h,
                       bottom: MediaQuery.of(context).viewInsets.bottom + 20.h,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Current location indicator with refresh button
+                        // Current location indicator
                         Container(
-                          padding: EdgeInsets.all(16.w),
+                          padding: EdgeInsets.all(12.w),
                           decoration: BoxDecoration(
-                            color: Color(0xFFFFC107).withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(12.r),
-                            border: Border.all(
-                              color: Color(0xFFFFC107),
-                              width: 1.5,
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFF4FC3F7).withValues(alpha: 0.15),
+                                Color(0xFF29B6F6).withValues(alpha: 0.05),
+                              ],
                             ),
+                            borderRadius: BorderRadius.circular(20.r),
+                            border: Border.all(
+                              color: Color(0xFF4FC3F7).withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0xFF4FC3F7).withValues(alpha: 0.2),
+                                blurRadius: 15,
+                                spreadRadius: 1,
+                                offset: Offset(0, 5),
+                              ),
+                            ],
                           ),
                           child: Row(
                             children: [
-                              Icon(
-                                Icons.my_location,
-                                color: Colors.blue,
-                                size: 20.sp,
+                              Container(
+                                padding: EdgeInsets.all(12.w),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color(0xFF4FC3F7),
+                                      Color(0xFF29B6F6),
+                                    ],
+                                  ),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Color(
+                                        0xFF4FC3F7,
+                                      ).withValues(alpha: 0.5),
+                                      blurRadius: 10,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  Icons.my_location,
+                                  color: Colors.white,
+                                  size: 22.sp,
+                                ),
                               ),
-                              SizedBox(width: 8.w),
+                              SizedBox(width: 14.w),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      "Starting Point",
-                                      style: styleW600(
-                                        size: 12.sp,
-                                        color: Colors.grey[600],
-                                      ),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          "Starting Point",
+                                          style: styleW600(
+                                            size: 13.sp,
+                                            color: Colors.grey[700],
+                                          ),
+                                        ),
+                                        SizedBox(width: 6.w),
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 8.w,
+                                            vertical: 2.h,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.withValues(
+                                              alpha: 0.2,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              10.r,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            "LIVE",
+                                            style: styleW600(
+                                              size: 9.sp,
+                                              color: Colors.green[700],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    SizedBox(height: 4.h),
+                                    SizedBox(height: 6.h),
                                     Obx(
                                       () => Text(
                                         currentLocationText.value,
-                                        style: styleW500(
-                                          size: 13.sp,
+                                        style: styleW600(
+                                          size: 14.sp,
                                           color: Colors.black87,
                                         ),
                                         maxLines: 2,
@@ -5343,17 +6216,29 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
                                 ),
                               ),
                               SizedBox(width: 8.w),
-                              IconButton(
-                                onPressed:
-                                    () => refreshCurrentLocationInSheet(),
-                                icon: Icon(Icons.refresh, size: 20.sp),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: Colors.blue.withValues(
-                                    alpha: 0.1,
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color(0xFF4FC3F7).withValues(alpha: 0.2),
+                                      Colors.white,
+                                    ],
                                   ),
-                                  shape: CircleBorder(),
+                                  shape: BoxShape.circle,
                                 ),
-                                tooltip: 'Refresh location',
+                                child: IconButton(
+                                  onPressed:
+                                      () => refreshCurrentLocationInSheet(),
+                                  icon: Icon(
+                                    Icons.refresh_rounded,
+                                    size: 22.sp,
+                                    color: Color(0xFF4FC3F7),
+                                  ),
+                                  style: IconButton.styleFrom(
+                                    shape: CircleBorder(),
+                                  ),
+                                  tooltip: 'Refresh location',
+                                ),
                               ),
                             ],
                           ),
@@ -5361,7 +6246,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
                         SizedBox(height: 20.h),
 
-                        // To address input
+                        // Destination input
                         Text(
                           "Destination",
                           style: styleW600(size: 16.sp, color: Colors.black87),
@@ -5369,104 +6254,94 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
                         SizedBox(height: 8.h),
                         Container(
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12.r),
-                            border: Border.all(color: Colors.grey[300]!),
-                            color: Colors.grey[50],
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white,
+                                Color(0xFFFFF9E6).withValues(alpha: 0.5),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(20.r),
+                            border: Border.all(
+                              color: Color(0xFFFFC107).withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(
+                                  0xFFFFC107,
+                                ).withValues(alpha: 0.15),
+                                blurRadius: 15,
+                                spreadRadius: 1,
+                                offset: Offset(0, 5),
+                              ),
+                            ],
                           ),
                           child: TextField(
                             controller: toController,
                             decoration: InputDecoration(
-                              hintText: "Enter destination address",
+                              hintText: "Enter your destination...",
                               hintStyle: styleW400(
                                 size: 14.sp,
-                                color: Colors.grey[500],
+                                color: Colors.grey[400],
                               ),
                               prefixIcon: Container(
                                 padding: EdgeInsets.all(12.w),
-                                child: CircleAvatar(
-                                  radius: 6.r,
-                                  backgroundColor: Colors.red,
+                                child: Container(
+                                  width: 12.w,
+                                  height: 12.w,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Colors.red[400]!,
+                                        Colors.red[600]!,
+                                      ],
+                                    ),
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.red.withValues(
+                                          alpha: 0.4,
+                                        ),
+                                        blurRadius: 8,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
+                              suffixIcon:
+                                  toController.text.isNotEmpty
+                                      ? IconButton(
+                                        icon: Icon(
+                                          Icons.cancel,
+                                          color: Colors.grey[400],
+                                        ),
+                                        onPressed: () {
+                                          toController.clear();
+                                          locationSuggestions.clear();
+                                        },
+                                      )
+                                      : null,
                               border: InputBorder.none,
                               contentPadding: EdgeInsets.symmetric(
-                                horizontal: 16.w,
-                                vertical: 16.h,
+                                horizontal: 12.w,
+                                vertical: 18.h,
                               ),
                             ),
-                            style: styleW500(
-                              size: 14.sp,
+                            style: styleW600(
+                              size: 15.sp,
                               color: Colors.black87,
                             ),
                             onChanged: (value) async {
-                              if (value.length > 5) {
+                              if (value.length > 2) {
                                 await updateLocationSuggestions(value);
+                              } else {
+                                locationSuggestions.clear();
                               }
                             },
                           ),
                         ),
-
-                        // Location details preview
-                        Obx(
-                          () =>
-                              locationSuggestions.isNotEmpty
-                                  ? Container(
-                                    constraints: BoxConstraints(
-                                      maxHeight: 200.h,
-                                    ),
-                                    child: ListView.builder(
-                                      shrinkWrap: true,
-                                      itemCount: locationSuggestions.length,
-                                      itemBuilder: (context, index) {
-                                        final location =
-                                            locationSuggestions[index];
-
-                                        return FutureBuilder<
-                                          List<geocoding.Placemark>
-                                        >(
-                                          future: geocoding
-                                              .placemarkFromCoordinates(
-                                                location.latitude,
-                                                location.longitude,
-                                              ),
-                                          builder: (context, snapshot) {
-                                            if (!snapshot.hasData) {
-                                              return SizedBox();
-                                            }
-
-                                            final placeMark =
-                                                snapshot.data!.first;
-                                            final address =
-                                                "${placeMark.street ?? ''}, ${placeMark.locality ?? ''}, ${placeMark.administrativeArea ?? ''}";
-
-                                            return ListTile(
-                                              leading: Icon(
-                                                Icons.location_on,
-                                                color: Color(0xFFFFC107),
-                                              ),
-                                              title: Text(
-                                                address,
-                                                style: styleW500(size: 12.sp),
-                                              ),
-                                              onTap: () {
-                                                toController.text = address;
-                                                locationDetails.value = address;
-                                                locationSuggestions.clear();
-                                                FocusScope.of(
-                                                  context,
-                                                ).unfocus();
-                                              },
-                                            );
-                                          },
-                                        );
-                                      },
-                                    ),
-                                  )
-                                  : SizedBox(),
-                        ),
-
-                        SizedBox(height: 30.h),
-
+                        SizedBox(height: 20.h),
                         // Info card
                         Container(
                           padding: EdgeInsets.all(16.w),
@@ -5497,8 +6372,720 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
                             ],
                           ),
                         ),
+                        // Warning box under destination input
+                        Obx(
+                          () =>
+                              showDestinationWarning.value
+                                  ? Padding(
+                                    padding: EdgeInsets.only(top: 8.h),
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 12.w,
+                                        vertical: 10.h,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Color(
+                                          0xFFFFC107,
+                                        ).withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(
+                                          8.r,
+                                        ),
+                                        border: Border.all(
+                                          color: Color(
+                                            0xFFFFC107,
+                                          ).withValues(alpha: 0.3),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.warning_amber_outlined,
+                                            color: Color(0xFFFFA000),
+                                            size: 18.sp,
+                                          ),
+                                          SizedBox(width: 10.w),
+                                          Expanded(
+                                            child: Text(
+                                              destinationWarningText.value,
+                                              style: styleW500(
+                                                size: 13.sp,
+                                                color: Colors.black87,
+                                              ),
+                                            ),
+                                          ),
+                                          TextButton(
+                                            onPressed: () {
+                                              // Quick help: focus and show example
+                                              toController.text =
+                                                  "e.g. 123 Main St, City";
+                                              showDestinationWarning.value =
+                                                  false;
+                                            },
+                                            child: Text(
+                                              "Example",
+                                              style: styleW600(
+                                                size: 13.sp,
+                                                color: Colors.blue,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                  : SizedBox(),
+                        ),
 
-                        SizedBox(height: 30.h),
+                        // Location suggestions
+                        Obx(
+                          () =>
+                              locationSuggestions.isNotEmpty
+                                  ? Container(
+                                    constraints: BoxConstraints(
+                                      maxHeight: 200.h,
+                                    ),
+                                    child: ListView.builder(
+                                      shrinkWrap: true,
+                                      itemCount: locationSuggestions.length,
+                                      itemBuilder: (context, index) {
+                                        final location =
+                                            locationSuggestions[index];
+                                        return FutureBuilder<
+                                          List<geocoding.Placemark>
+                                        >(
+                                          future: geocoding
+                                              .placemarkFromCoordinates(
+                                                location.latitude,
+                                                location.longitude,
+                                              ),
+                                          builder: (context, snapshot) {
+                                            if (!snapshot.hasData)
+                                              return SizedBox();
+                                            final placeMark =
+                                                snapshot.data!.first;
+                                            final address =
+                                                "${placeMark.street ?? ''}, ${placeMark.locality ?? ''}, ${placeMark.administrativeArea ?? ''}";
+                                            return ListTile(
+                                              leading: Icon(
+                                                Icons.location_on,
+                                                color: Color(0xFFFFC107),
+                                              ),
+                                              title: Text(
+                                                address,
+                                                style: styleW500(size: 12.sp),
+                                              ),
+                                              onTap: () {
+                                                toController.text = address;
+                                                locationSuggestions.clear();
+                                                FocusScope.of(
+                                                  context,
+                                                ).unfocus();
+                                              },
+                                            );
+                                          },
+                                        );
+                                      },
+                                    ),
+                                  )
+                                  : SizedBox(),
+                        ),
+
+                        SizedBox(height: 20.h),
+
+                        // Tab Bar
+                        Obx(
+                          () => Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => selectedTabIndex.value = 0,
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 12.h,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            selectedTabIndex.value == 0
+                                                ? Color(0xFFFFC107)
+                                                : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(
+                                          12.r,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.history,
+                                            size: 18.sp,
+                                            color:
+                                                selectedTabIndex.value == 0
+                                                    ? Colors.black
+                                                    : Colors.grey[600],
+                                          ),
+                                          SizedBox(width: 6.w),
+                                          Text(
+                                            "Recent",
+                                            style: styleW600(
+                                              size: 13.sp,
+                                              color:
+                                                  selectedTabIndex.value == 0
+                                                      ? Colors.black
+                                                      : Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => selectedTabIndex.value = 1,
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 12.h,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            selectedTabIndex.value == 1
+                                                ? Color(0xFFFFC107)
+                                                : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(
+                                          12.r,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.home,
+                                            size: 18.sp,
+                                            color:
+                                                selectedTabIndex.value == 1
+                                                    ? Colors.black
+                                                    : Colors.grey[600],
+                                          ),
+                                          SizedBox(width: 6.w),
+                                          Text(
+                                            "Home",
+                                            style: styleW600(
+                                              size: 13.sp,
+                                              color:
+                                                  selectedTabIndex.value == 1
+                                                      ? Colors.black
+                                                      : Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => selectedTabIndex.value = 2,
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 12.h,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            selectedTabIndex.value == 2
+                                                ? Color(0xFFFFC107)
+                                                : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(
+                                          12.r,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.work,
+                                            size: 18.sp,
+                                            color:
+                                                selectedTabIndex.value == 2
+                                                    ? Colors.black
+                                                    : Colors.grey[600],
+                                          ),
+                                          SizedBox(width: 6.w),
+                                          Text(
+                                            "Work",
+                                            style: styleW600(
+                                              size: 13.sp,
+                                              color:
+                                                  selectedTabIndex.value == 2
+                                                      ? Colors.black
+                                                      : Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        SizedBox(height: 16.h),
+
+                        // Tab Content
+                        Obx(() {
+                          // Recent Searches Tab
+                          if (selectedTabIndex.value == 0) {
+                            return Container(
+                              constraints: BoxConstraints(maxHeight: 300.h),
+                              child:
+                                  recentSearches.isEmpty
+                                      ? Center(
+                                        child: Padding(
+                                          padding: EdgeInsets.all(40.w),
+                                          child: Column(
+                                            children: [
+                                              Icon(
+                                                Icons.history,
+                                                size: 30.sp,
+                                                color: Colors.grey[400],
+                                              ),
+                                              SizedBox(height: 12.h),
+                                              Text(
+                                                "No recent searches",
+                                                style: styleW500(
+                                                  size: 14.sp,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      )
+                                      : Column(
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                "Recent Searches",
+                                                style: styleW600(
+                                                  size: 14.sp,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                              TextButton(
+                                                onPressed: () {
+                                                  Get.dialog(
+                                                    AlertDialog(
+                                                      title: Text("Clear All?"),
+                                                      content: Text(
+                                                        "This will delete all recent searches.",
+                                                      ),
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed:
+                                                              () => Get.back(),
+                                                          child: Text("Cancel"),
+                                                        ),
+                                                        TextButton(
+                                                          onPressed: () {
+                                                            _clearRecentSearches();
+                                                            Get.back();
+                                                          },
+                                                          child: Text(
+                                                            "Clear",
+                                                            style: TextStyle(
+                                                              color: Colors.red,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                },
+                                                child: Text(
+                                                  "Clear All",
+                                                  style: styleW500(
+                                                    size: 12.sp,
+                                                    color: Colors.red,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          ListView.builder(
+                                            shrinkWrap: true,
+                                            physics:
+                                                NeverScrollableScrollPhysics(),
+                                            itemCount: recentSearches.length,
+                                            itemBuilder: (context, index) {
+                                              return ListTile(
+                                                contentPadding:
+                                                    EdgeInsets.symmetric(
+                                                      horizontal: 8.w,
+                                                      vertical: 4.h,
+                                                    ),
+                                                leading: Icon(
+                                                  Icons.history,
+                                                  color: Colors.grey[600],
+                                                  size: 20.sp,
+                                                ),
+                                                title: Text(
+                                                  recentSearches[index],
+                                                  style: styleW500(
+                                                    size: 13.sp,
+                                                    color: Colors.black87,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                trailing: IconButton(
+                                                  icon: Icon(
+                                                    Icons.close,
+                                                    size: 18.sp,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                  onPressed:
+                                                      () => _deleteRecentSearch(
+                                                        index,
+                                                      ),
+                                                ),
+                                                onTap: () {
+                                                  toController.text =
+                                                      recentSearches[index];
+                                                  FocusScope.of(
+                                                    context,
+                                                  ).unfocus();
+                                                },
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                            );
+                          }
+                          // HOME TAB
+                          else if (selectedTabIndex.value == 1) {
+                            return Obx(
+                              () =>
+                                  homeAddresses.isEmpty
+                                      ? Center(
+                                        child: Padding(
+                                          padding: EdgeInsets.all(25.w),
+                                          child: Column(
+                                            children: [
+                                              // Icon(Icons.home_outlined, size: 48.sp, color: Colors.grey[400]),
+                                              // SizedBox(height: 12.h),
+                                              Text(
+                                                "No home addresses saved",
+                                                style: styleW500(
+                                                  size: 14.sp,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                              SizedBox(height: 16.h),
+                                              ElevatedButton.icon(
+                                                onPressed:
+                                                    showHomeAddressDialog,
+                                                icon: Icon(
+                                                  Icons.add,
+                                                  size: 16.sp,
+                                                ),
+                                                label: Text(
+                                                  "Add Home Address",
+                                                  style: TextStyle(
+                                                    fontSize: 12.sp,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Color(
+                                                    0xFFFFC107,
+                                                  ),
+                                                  foregroundColor: Colors.black,
+                                                  padding: EdgeInsets.symmetric(
+                                                    horizontal: 24.w,
+                                                    vertical: 8.h,
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12.r,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      )
+                                      : Column(
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                "Home Addresses",
+                                                style: styleW600(
+                                                  size: 14.sp,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                              TextButton(
+                                                onPressed:
+                                                    showHomeAddressDialog,
+                                                child: Text(
+                                                  "Add New",
+                                                  style: styleW500(
+                                                    size: 12.sp,
+                                                    color: Colors.blue,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          ListView.builder(
+                                            shrinkWrap: true,
+                                            physics:
+                                                NeverScrollableScrollPhysics(),
+                                            itemCount: homeAddresses.length,
+                                            itemBuilder: (context, index) {
+                                              final address =
+                                                  homeAddresses[index];
+                                              return ListTile(
+                                                contentPadding:
+                                                    EdgeInsets.symmetric(
+                                                      horizontal: 8.w,
+                                                      vertical: 4.h,
+                                                    ),
+                                                leading: Icon(
+                                                  Icons.home,
+                                                  color: Color(0xFFFFC107),
+                                                  size: 20.sp,
+                                                ),
+                                                title: Text(
+                                                  address,
+                                                  style: styleW500(
+                                                    size: 13.sp,
+                                                    color: Colors.black87,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                trailing: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    IconButton(
+                                                      icon: Icon(
+                                                        Icons.edit,
+                                                        color: Colors.blue,
+                                                        size: 20.sp,
+                                                      ),
+                                                      onPressed:
+                                                          () =>
+                                                              showHomeAddressDialog(
+                                                                editIndex:
+                                                                    index,
+                                                              ),
+                                                    ),
+                                                    IconButton(
+                                                      icon: Icon(
+                                                        Icons.close,
+                                                        color: Colors.grey[600],
+                                                        size: 18.sp,
+                                                      ),
+                                                      onPressed: () {
+                                                        homeAddresses.removeAt(
+                                                          index,
+                                                        );
+                                                        _saveAddresses();
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                                onTap: () {
+                                                  toController.text = address;
+                                                  FocusScope.of(
+                                                    context,
+                                                  ).unfocus();
+                                                },
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                            );
+                          }
+                          // Work Tab
+                          else {
+                            return Obx(
+                              () =>
+                                  workAddresses.isEmpty
+                                      ? Center(
+                                        child: Padding(
+                                          padding: EdgeInsets.all(25.w),
+                                          child: Column(
+                                            children: [
+                                              // Icon(Icons.work_outline, size: 48.sp, color: Colors.grey[400]),
+                                              // SizedBox(height: 12.h),
+                                              Text(
+                                                "No work addresses saved",
+                                                style: styleW500(
+                                                  size: 14.sp,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                              SizedBox(height: 16.h),
+                                              ElevatedButton.icon(
+                                                onPressed:
+                                                    showWorkAddressDialog,
+                                                icon: Icon(
+                                                  Icons.add,
+                                                  size: 16.sp,
+                                                ),
+                                                label: Text("Add Work Address" , style: TextStyle(
+                                                  fontSize: 12.sp,
+                                                  fontWeight: FontWeight.w600,
+                                                ),),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Color(
+                                                    0xFFFFC107,
+                                                  ),
+                                                  foregroundColor: Colors.black,
+                                                  padding: EdgeInsets.symmetric(
+                                                    horizontal: 24.w,
+                                                    vertical: 8.h,
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12.r,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      )
+                                      : Column(
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                "Work Addresses",
+                                                style: styleW600(
+                                                  size: 14.sp,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                              TextButton(
+                                                onPressed:
+                                                    showWorkAddressDialog,
+                                                child: Text(
+                                                  "Add New",
+                                                  style: styleW500(
+                                                    size: 12.sp,
+                                                    color: Colors.blue,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          ListView.builder(
+                                            shrinkWrap: true,
+                                            physics:
+                                                NeverScrollableScrollPhysics(),
+                                            itemCount: workAddresses.length,
+                                            itemBuilder: (context, index) {
+                                              final address =
+                                                  workAddresses[index];
+                                              return ListTile(
+                                                contentPadding:
+                                                    EdgeInsets.symmetric(
+                                                      horizontal: 8.w,
+                                                      vertical: 4.h,
+                                                    ),
+                                                leading: Icon(
+                                                  Icons.work,
+                                                  color: Color(0xFFFFC107),
+                                                  size: 20.sp,
+                                                ),
+                                                title: Text(
+                                                  address,
+                                                  style: styleW500(
+                                                    size: 13.sp,
+                                                    color: Colors.black87,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                trailing: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    IconButton(
+                                                      icon: Icon(
+                                                        Icons.edit,
+                                                        color: Colors.blue,
+                                                        size: 20.sp,
+                                                      ),
+                                                      onPressed:
+                                                          () =>
+                                                              showWorkAddressDialog(
+                                                                editIndex:
+                                                                    index,
+                                                              ),
+                                                    ),
+                                                    IconButton(
+                                                      icon: Icon(
+                                                        Icons.close,
+                                                        color: Colors.grey[600],
+                                                        size: 18.sp,
+                                                      ),
+                                                      onPressed: () {
+                                                        workAddresses.removeAt(
+                                                          index,
+                                                        );
+                                                        _saveAddresses();
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                                onTap: () {
+                                                  toController.text = address;
+                                                  FocusScope.of(
+                                                    context,
+                                                  ).unfocus();
+                                                },
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                            );
+                          }
+                        }),
+
+                        SizedBox(height: 20.h),
                       ],
                     ),
                   ),
@@ -5506,7 +7093,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
                 // Bottom action buttons
                 Container(
-                  padding: EdgeInsets.all(20.w),
+                  padding: EdgeInsets.all(10.w),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     border: Border(top: BorderSide(color: Colors.grey[200]!)),
@@ -5514,106 +7101,98 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
                   child: Obx(
                     () => Column(
                       children: [
-                        // Find Route Button
                         SizedBox(
                           width: double.infinity,
-                          height: 50.h,
+                          height: 45.h,
                           child: ElevatedButton(
                             onPressed:
                                 isLoading.value
                                     ? null
                                     : () async {
-                                      if (toController.text.trim().isEmpty) {
+                                      final destination =
+                                          toController.text.trim();
+
+                                      if (destination.isEmpty) {
                                         _showSnackBar(
                                           context,
                                           "Please enter destination address",
                                           isError: true,
                                         );
+                                        showDestinationWarning.value = true;
+                                        return;
+                                      }
+
+                                      if (destination.length < 5) {
+                                        _showSnackBar(
+                                          context,
+                                          "Please enter a more specific address",
+                                          isError: true,
+                                        );
+                                        showDestinationWarning.value = true;
                                         return;
                                       }
 
                                       isLoading.value = true;
 
                                       try {
-                                        await findRoute(
-                                          toController.text.trim(),
-                                        );
-                                        isLoading.value = false;
+                                        await findRoute(destination);
+
+                                        // Add to recent searches
+                                        _addToRecentSearches(destination);
+
+                                        // Save as current destination
+                                        destinationAddress.value = destination;
+
+                                        // Close sheet
                                         Navigator.pop(context);
-                                        speak("Route found. Ready to navigate");
                                       } catch (e) {
-                                        isLoading.value = false;
                                         _showSnackBar(
                                           context,
-                                          "Error: ${e.toString()}",
+                                          "Error finding route: $e",
                                           isError: true,
                                         );
+                                      } finally {
+                                        isLoading.value = false;
                                       }
                                     },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Color(0xFFFFC107),
-                              foregroundColor: AppColors.black,
-                              elevation: 0,
+                              foregroundColor: Colors.black,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12.r),
                               ),
                             ),
                             child:
                                 isLoading.value
-                                    ? Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        SizedBox(
-                                          width: 20.w,
-                                          height: 20.h,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                  Colors.white,
-                                                ),
-                                          ),
-                                        ),
-                                        SizedBox(width: 12.w),
-                                        Text(
-                                          "Finding Route...",
-                                          style: styleW600(
-                                            size: 16.sp,
-                                            color: AppColors.black,
-                                          ),
-                                        ),
-                                      ],
+                                    ? SizedBox(
+                                      width: 20.w,
+                                      height: 20.w,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     )
-                                    : Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.directions, size: 20.sp),
-                                        SizedBox(width: 8.w),
-                                        Text(
-                                          "Find Route",
-                                          style: styleW600(
-                                            size: 16.sp,
-                                            color: AppColors.black,
-                                          ),
-                                        ),
-                                      ],
+                                    : Text(
+                                      "Find Route",
+                                      style: styleW600(
+                                        size: 14.sp,
+                                        color: Colors.black,
+                                      ),
                                     ),
                           ),
                         ),
 
                         SizedBox(height: 12.h),
 
-                        // Cancel Button
                         SizedBox(
                           width: double.infinity,
-                          height: 50.h,
+                          height: 42.h,
                           child: OutlinedButton(
-                            onPressed:
-                                isLoading.value
-                                    ? null
-                                    : () => Navigator.pop(context),
+                            onPressed: () {
+                              // Option: clear input quickly
+                              toController.clear();
+                              locationSuggestions.clear();
+                              showDestinationWarning.value = false;
+                            },
                             style: OutlinedButton.styleFrom(
                               side: BorderSide(color: Colors.grey[300]!),
                               shape: RoundedRectangleBorder(
@@ -5621,10 +7200,10 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
                               ),
                             ),
                             child: Text(
-                              "Cancel",
+                              "Clear",
                               style: styleW500(
-                                size: 16.sp,
-                                color: Colors.grey[600],
+                                size: 14.sp,
+                                color: Colors.grey[700],
                               ),
                             ),
                           ),
@@ -5633,10 +7212,18 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
                     ),
                   ),
                 ),
+                SizedBox(height: 45.h),
               ],
             ),
           ),
-    );
+    ).whenComplete(() async {
+      // Delay dispose to ensure bottom sheet animation completed
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      if (toController.hasListeners) toController.dispose();
+      if (homeController.hasListeners) homeController.dispose();
+      if (workController.hasListeners) workController.dispose();
+    });
   }
 
   final RxBool hasUserAdjustedZoom = false.obs;
@@ -5868,245 +7455,245 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //     }
   //   }
   /// 08/10/2025 old
-//   Future<void> _initLocationTracking() async {
-//     try {
-//       log_print.log("🔧 Starting location tracking initialization...");
-//
-//       // Check permissions first
-//       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-//       if (!serviceEnabled) {
-//         throw Exception("Location services disabled");
-//       }
-//
-//       LocationPermission permission = await Geolocator.checkPermission();
-//       if (permission == LocationPermission.denied) {
-//         permission = await Geolocator.requestPermission();
-//         if (permission != LocationPermission.whileInUse &&
-//             permission != LocationPermission.always) {
-//           throw Exception("Location permission denied");
-//         }
-//       }
-//
-//       // Initialize notifications
-//       const AndroidInitializationSettings initializationSettingsAndroid =
-//           AndroidInitializationSettings('@mipmap/ic_launcher');
-//
-//       final InitializationSettings initializationSettings =
-//           InitializationSettings(android: initializationSettingsAndroid);
-//
-//       await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-//
-//       // Location settings - LESS STRICT for initial updates
-//       final locationSettings = LocationSettings(
-//         accuracy: LocationAccuracy.high,
-//         distanceFilter: 1,
-//       );
-//
-//       // Show persistent notification
-//       const AndroidNotificationDetails androidPlatformChannelSpecifics =
-//           AndroidNotificationDetails(
-//             'location_channel',
-//             'Location Tracking',
-//             channelDescription: 'Tracking railway crossings nearby',
-//             importance: Importance.low,
-//             priority: Priority.low,
-//             ongoing: true,
-//             enableLights: false,
-//             enableVibration: false,
-//             autoCancel: false,
-//             showWhen: false,
-//             icon: '@mipmap/ic_launcher',
-//           );
-//
-//       const NotificationDetails platformChannelSpecifics = NotificationDetails(
-//         android: androidPlatformChannelSpecifics,
-//       );
-//
-//       await flutterLocalNotificationsPlugin.show(
-//         0,
-//         'Railway Crossing Alerts Active',
-//         'Monitoring railway crossings in background',
-//         platformChannelSpecifics,
-//       );
-//
-//       // Cancel any existing stream
-//       await _positionStream?.cancel();
-//
-//       log_print.log("🎯 Setting up position stream...");
-//       //(07/10/2025) OLD
-//       // FIXED: Position stream with better filtering
-//       // _positionStream = Geolocator.getPositionStream(
-//       //   locationSettings: locationSettings,
-//       // ).listen((Position position) {
-//       //   log_print.log(
-//       //     '📍 RAW Location Update: '
-//       //     'Lat: ${position.latitude.toStringAsFixed(6)}, '
-//       //     'Lng: ${position.longitude.toStringAsFixed(6)}, '
-//       //     'Speed: ${position.speed.toStringAsFixed(1)} m/s, '
-//       //     'Accuracy: ${position.accuracy.toStringAsFixed(1)}m',
-//       //   );
-//       //
-//       //   // RELAXED accuracy filter for navigation
-//       //   if (position.accuracy > 100) {
-//       //     // Increased from 50 to 100
-//       //     log_print.log(
-//       //       'Skipping position with poor accuracy: ${position.accuracy}m',
-//       //     );
-//       //     return;
-//       //   }
-//       //
-//       //   // ALWAYS update position during navigation, regardless of movement
-//       //   if (isNavigating.value) {
-//       //     userPosition.value = position;
-//       //     log_print.log('🚗 NAVIGATION MODE: Force updating position');
-//       //   } else {
-//       //     // Only filter movement when NOT navigating
-//       //     final hasMoved = _hasUserMovedSignificantlyNew(position);
-//       //     if (!hasMoved) {
-//       //       log_print.log('User has not moved significantly, skipping update');
-//       //       return;
-//       //     }
-//       //     userPosition.value = position;
-//       //   }
-//       //
-//       //   // Update bearing and map rotation
-//       //   final speed = position.speed; // m/s
-//       //   if (speed >= 1.0) {
-//       //     // Reduced from 1.5 to 1.0
-//       //     if (_lastUserLatLng != null) {
-//       //       final bearing = _calculateBearing(
-//       //         _lastUserLatLng!.latitude,
-//       //         _lastUserLatLng!.longitude,
-//       //         position.latitude,
-//       //         position.longitude,
-//       //       );
-//       //       mapRotation.value = bearing;
-//       //     }
-//       //   } else if (position.headingAccuracy > 0 &&
-//       //       position.headingAccuracy < 15) {
-//       //     mapRotation.value = position.heading;
-//       //   }
-//       //
-//       //   _lastUserLatLng = LatLng(position.latitude, position.longitude);
-//       //   userBearing.value = position.heading;
-//       //
-//       //   // Save location for background use
-//       //   _saveLocationToPrefs();
-//       //
-//       //   if (isNavigating.value) {
-//       //     // IMMEDIATE map updates during navigation
-//       //     if (!hasUserAdjustedZoom.value) {
-//       //       isProgrammaticMove.value = true;
-//       //       mapController.move(
-//       //         LatLng(position.latitude, position.longitude),
-//       //         18,
-//       //       );
-//       //       isProgrammaticMove.value = false;
-//       //     }
-//       //
-//       //     // Process route updates immediately
-//       //     _updateRouteProgress();
-//       //     _checkProximityToCrossings();
-//       //     _checkRouteDeviation();
-//       //     _provideVoiceNavigation();
-//       //   } else {
-//       //     checkNearbyCrossings();
-//       //   }
-//       // });
-// //(07/10/2025) New
-//       // FIXED: Position stream with consistent crossing checks
-//       _positionStream = Geolocator.getPositionStream(
-//         locationSettings: locationSettings,
-//       ).listen((Position position) {
-//         log_print.log(
-//           '📍 RAW Location Update: '
-//               'Lat: ${position.latitude.toStringAsFixed(6)}, '
-//               'Lng: ${position.longitude.toStringAsFixed(6)}, '
-//               'Speed: ${position.speed.toStringAsFixed(1)} m/s, '
-//               'Accuracy: ${position.accuracy.toStringAsFixed(1)}m',
-//         );
-//
-//         // RELAXED accuracy filter for navigation
-//         if (position.accuracy > 100) {
-//           log_print.log(
-//             'Skipping position with poor accuracy: ${position.accuracy}m',
-//           );
-//           return;
-//         }
-//
-//         // ALWAYS update position during navigation, regardless of movement
-//         if (isNavigating.value) {
-//           userPosition.value = position;
-//           log_print.log('🚗 NAVIGATION MODE: Force updating position');
-//         } else {
-//           // Only filter movement when NOT navigating
-//           final hasMoved = _hasUserMovedSignificantlyNew(position);
-//           if (!hasMoved) {
-//             log_print.log('User has not moved significantly, skipping update');
-//             return;
-//           }
-//           userPosition.value = position;
-//         }
-//
-//         // Update bearing and map rotation
-//         final speed = position.speed; // m/s
-//         if (speed >= 1.0) {
-//           if (_lastUserLatLng != null) {
-//             final bearing = _calculateBearing(
-//               _lastUserLatLng!.latitude,
-//               _lastUserLatLng!.longitude,
-//               position.latitude,
-//               position.longitude,
-//             );
-//             mapRotation.value = bearing;
-//           }
-//         } else if (position.headingAccuracy > 0 &&
-//             position.headingAccuracy < 15) {
-//           mapRotation.value = position.heading;
-//         }
-//
-//         _lastUserLatLng = LatLng(position.latitude, position.longitude);
-//         userBearing.value = position.heading;
-//
-//         // Save location for background use
-//         _saveLocationToPrefs();
-//
-//         if (isNavigating.value) {
-//           // IMMEDIATE map updates during navigation
-//           if (!hasUserAdjustedZoom.value) {
-//             isProgrammaticMove.value = true;
-//             mapController.move(
-//               LatLng(position.latitude, position.longitude),
-//               18,
-//             );
-//             isProgrammaticMove.value = false;
-//           }
-//
-//           // Process route updates immediately
-//           _updateRouteProgress();
-//           _checkProximityToCrossings();
-//           _checkRouteDeviation();
-//           _provideVoiceNavigation();
-//         } else {
-//           // ✅ ALWAYS check crossings, even when not navigating
-//           checkNearbyCrossings();
-//
-//           // Additional background checks for app state
-//           if (Get.currentRoute == Routes.CROSSING) {
-//             checkBackgroundCrossings(position);
-//           }
-//         }
-//       });
-//       isTrackingLocation.value = true;
-//       log_print.log('✅ Location tracking initialized successfully');
-//     } catch (e) {
-//       errorMessage.value = "Failed to initialize location tracking: $e";
-//       log_print.log("❌ Location tracking initialization error: $e");
-//       isTrackingLocation.value = false;
-//       _positionStream = null;
-//     }
-//   }
-//08/10/2025 new
+  //   Future<void> _initLocationTracking() async {
+  //     try {
+  //       log_print.log("🔧 Starting location tracking initialization...");
+  //
+  //       // Check permissions first
+  //       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+  //       if (!serviceEnabled) {
+  //         throw Exception("Location services disabled");
+  //       }
+  //
+  //       LocationPermission permission = await Geolocator.checkPermission();
+  //       if (permission == LocationPermission.denied) {
+  //         permission = await Geolocator.requestPermission();
+  //         if (permission != LocationPermission.whileInUse &&
+  //             permission != LocationPermission.always) {
+  //           throw Exception("Location permission denied");
+  //         }
+  //       }
+  //
+  //       // Initialize notifications
+  //       const AndroidInitializationSettings initializationSettingsAndroid =
+  //           AndroidInitializationSettings('@mipmap/ic_launcher');
+  //
+  //       final InitializationSettings initializationSettings =
+  //           InitializationSettings(android: initializationSettingsAndroid);
+  //
+  //       await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  //
+  //       // Location settings - LESS STRICT for initial updates
+  //       final locationSettings = LocationSettings(
+  //         accuracy: LocationAccuracy.high,
+  //         distanceFilter: 1,
+  //       );
+  //
+  //       // Show persistent notification
+  //       const AndroidNotificationDetails androidPlatformChannelSpecifics =
+  //           AndroidNotificationDetails(
+  //             'location_channel',
+  //             'Location Tracking',
+  //             channelDescription: 'Tracking railway crossings nearby',
+  //             importance: Importance.low,
+  //             priority: Priority.low,
+  //             ongoing: true,
+  //             enableLights: false,
+  //             enableVibration: false,
+  //             autoCancel: false,
+  //             showWhen: false,
+  //             icon: '@mipmap/ic_launcher',
+  //           );
+  //
+  //       const NotificationDetails platformChannelSpecifics = NotificationDetails(
+  //         android: androidPlatformChannelSpecifics,
+  //       );
+  //
+  //       await flutterLocalNotificationsPlugin.show(
+  //         0,
+  //         'Railway Crossing Alerts Active',
+  //         'Monitoring railway crossings in background',
+  //         platformChannelSpecifics,
+  //       );
+  //
+  //       // Cancel any existing stream
+  //       await _positionStream?.cancel();
+  //
+  //       log_print.log("🎯 Setting up position stream...");
+  //       //(07/10/2025) OLD
+  //       // FIXED: Position stream with better filtering
+  //       // _positionStream = Geolocator.getPositionStream(
+  //       //   locationSettings: locationSettings,
+  //       // ).listen((Position position) {
+  //       //   log_print.log(
+  //       //     '📍 RAW Location Update: '
+  //       //     'Lat: ${position.latitude.toStringAsFixed(6)}, '
+  //       //     'Lng: ${position.longitude.toStringAsFixed(6)}, '
+  //       //     'Speed: ${position.speed.toStringAsFixed(1)} m/s, '
+  //       //     'Accuracy: ${position.accuracy.toStringAsFixed(1)}m',
+  //       //   );
+  //       //
+  //       //   // RELAXED accuracy filter for navigation
+  //       //   if (position.accuracy > 100) {
+  //       //     // Increased from 50 to 100
+  //       //     log_print.log(
+  //       //       'Skipping position with poor accuracy: ${position.accuracy}m',
+  //       //     );
+  //       //     return;
+  //       //   }
+  //       //
+  //       //   // ALWAYS update position during navigation, regardless of movement
+  //       //   if (isNavigating.value) {
+  //       //     userPosition.value = position;
+  //       //     log_print.log('🚗 NAVIGATION MODE: Force updating position');
+  //       //   } else {
+  //       //     // Only filter movement when NOT navigating
+  //       //     final hasMoved = _hasUserMovedSignificantlyNew(position);
+  //       //     if (!hasMoved) {
+  //       //       log_print.log('User has not moved significantly, skipping update');
+  //       //       return;
+  //       //     }
+  //       //     userPosition.value = position;
+  //       //   }
+  //       //
+  //       //   // Update bearing and map rotation
+  //       //   final speed = position.speed; // m/s
+  //       //   if (speed >= 1.0) {
+  //       //     // Reduced from 1.5 to 1.0
+  //       //     if (_lastUserLatLng != null) {
+  //       //       final bearing = _calculateBearing(
+  //       //         _lastUserLatLng!.latitude,
+  //       //         _lastUserLatLng!.longitude,
+  //       //         position.latitude,
+  //       //         position.longitude,
+  //       //       );
+  //       //       mapRotation.value = bearing;
+  //       //     }
+  //       //   } else if (position.headingAccuracy > 0 &&
+  //       //       position.headingAccuracy < 15) {
+  //       //     mapRotation.value = position.heading;
+  //       //   }
+  //       //
+  //       //   _lastUserLatLng = LatLng(position.latitude, position.longitude);
+  //       //   userBearing.value = position.heading;
+  //       //
+  //       //   // Save location for background use
+  //       //   _saveLocationToPrefs();
+  //       //
+  //       //   if (isNavigating.value) {
+  //       //     // IMMEDIATE map updates during navigation
+  //       //     if (!hasUserAdjustedZoom.value) {
+  //       //       isProgrammaticMove.value = true;
+  //       //       mapController.move(
+  //       //         LatLng(position.latitude, position.longitude),
+  //       //         18,
+  //       //       );
+  //       //       isProgrammaticMove.value = false;
+  //       //     }
+  //       //
+  //       //     // Process route updates immediately
+  //       //     _updateRouteProgress();
+  //       //     _checkProximityToCrossings();
+  //       //     _checkRouteDeviation();
+  //       //     _provideVoiceNavigation();
+  //       //   } else {
+  //       //     checkNearbyCrossings();
+  //       //   }
+  //       // });
+  // //(07/10/2025) New
+  //       // FIXED: Position stream with consistent crossing checks
+  //       _positionStream = Geolocator.getPositionStream(
+  //         locationSettings: locationSettings,
+  //       ).listen((Position position) {
+  //         log_print.log(
+  //           '📍 RAW Location Update: '
+  //               'Lat: ${position.latitude.toStringAsFixed(6)}, '
+  //               'Lng: ${position.longitude.toStringAsFixed(6)}, '
+  //               'Speed: ${position.speed.toStringAsFixed(1)} m/s, '
+  //               'Accuracy: ${position.accuracy.toStringAsFixed(1)}m',
+  //         );
+  //
+  //         // RELAXED accuracy filter for navigation
+  //         if (position.accuracy > 100) {
+  //           log_print.log(
+  //             'Skipping position with poor accuracy: ${position.accuracy}m',
+  //           );
+  //           return;
+  //         }
+  //
+  //         // ALWAYS update position during navigation, regardless of movement
+  //         if (isNavigating.value) {
+  //           userPosition.value = position;
+  //           log_print.log('🚗 NAVIGATION MODE: Force updating position');
+  //         } else {
+  //           // Only filter movement when NOT navigating
+  //           final hasMoved = _hasUserMovedSignificantlyNew(position);
+  //           if (!hasMoved) {
+  //             log_print.log('User has not moved significantly, skipping update');
+  //             return;
+  //           }
+  //           userPosition.value = position;
+  //         }
+  //
+  //         // Update bearing and map rotation
+  //         final speed = position.speed; // m/s
+  //         if (speed >= 1.0) {
+  //           if (_lastUserLatLng != null) {
+  //             final bearing = _calculateBearing(
+  //               _lastUserLatLng!.latitude,
+  //               _lastUserLatLng!.longitude,
+  //               position.latitude,
+  //               position.longitude,
+  //             );
+  //             mapRotation.value = bearing;
+  //           }
+  //         } else if (position.headingAccuracy > 0 &&
+  //             position.headingAccuracy < 15) {
+  //           mapRotation.value = position.heading;
+  //         }
+  //
+  //         _lastUserLatLng = LatLng(position.latitude, position.longitude);
+  //         userBearing.value = position.heading;
+  //
+  //         // Save location for background use
+  //         _saveLocationToPrefs();
+  //
+  //         if (isNavigating.value) {
+  //           // IMMEDIATE map updates during navigation
+  //           if (!hasUserAdjustedZoom.value) {
+  //             isProgrammaticMove.value = true;
+  //             mapController.move(
+  //               LatLng(position.latitude, position.longitude),
+  //               18,
+  //             );
+  //             isProgrammaticMove.value = false;
+  //           }
+  //
+  //           // Process route updates immediately
+  //           _updateRouteProgress();
+  //           _checkProximityToCrossings();
+  //           _checkRouteDeviation();
+  //           _provideVoiceNavigation();
+  //         } else {
+  //           // ✅ ALWAYS check crossings, even when not navigating
+  //           checkNearbyCrossings();
+  //
+  //           // Additional background checks for app state
+  //           if (Get.currentRoute == Routes.CROSSING) {
+  //             checkBackgroundCrossings(position);
+  //           }
+  //         }
+  //       });
+  //       isTrackingLocation.value = true;
+  //       log_print.log('✅ Location tracking initialized successfully');
+  //     } catch (e) {
+  //       errorMessage.value = "Failed to initialize location tracking: $e";
+  //       log_print.log("❌ Location tracking initialization error: $e");
+  //       isTrackingLocation.value = false;
+  //       _positionStream = null;
+  //     }
+  //   }
+  //08/10/2025 new
   Future<void> _initLocationTracking() async {
     try {
       log_print.log('🔧 Starting location tracking initialization...');
@@ -6168,17 +7755,17 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       _positionStream = Geolocator.getPositionStream(
         locationSettings: locationSettings,
       ).listen(
-            (Position position) {
-              // ✅ ALWAYS LOG - even in background
-              final timestamp = DateTime.now().toIso8601String();
-              log_print.log('📍📍📍 LOCATION UPDATE [$timestamp] 📍📍📍');
-              log_print.log('Lat: ${position.latitude.toStringAsFixed(6)}');
-              log_print.log('Lng: ${position.longitude.toStringAsFixed(6)}');
-              log_print.log('Accuracy: ${position.accuracy.toStringAsFixed(1)}m');
-              log_print.log('Speed: ${position.speed.toStringAsFixed(1)} m/s');
-              log_print.log('Is Navigating: ${isNavigating.value}');
-              log_print.log('Crossings Along Route: ${crossingsAlongRoute.length}');
-              log_print.log('Nearby Locations: ${nearbyLocations.length}');
+        (Position position) {
+          // ✅ ALWAYS LOG - even in background
+          final timestamp = DateTime.now().toIso8601String();
+          log_print.log('📍📍📍 LOCATION UPDATE [$timestamp] 📍📍📍');
+          log_print.log('Lat: ${position.latitude.toStringAsFixed(6)}');
+          log_print.log('Lng: ${position.longitude.toStringAsFixed(6)}');
+          log_print.log('Accuracy: ${position.accuracy.toStringAsFixed(1)}m');
+          log_print.log('Speed: ${position.speed.toStringAsFixed(1)} m/s');
+          log_print.log('Is Navigating: ${isNavigating.value}');
+          log_print.log('Crossings Along Route: ${crossingsAlongRoute.length}');
+          log_print.log('Nearby Locations: ${nearbyLocations.length}');
 
           // Skip extremely poor accuracy
           if (position.accuracy > 100) {
@@ -6239,9 +7826,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
             _provideVoiceNavigation();
             // ✅ Update notification in background
             _updateBackgroundNotification();
-
           }
-              log_print.log('─────────────────────────────────────');
+          log_print.log('─────────────────────────────────────');
         },
         onError: (error) {
           log_print.log('❌ Location stream ERROR: $error');
@@ -6251,7 +7837,6 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
       isTrackingLocation.value = true;
       log_print.log('✅✅✅ LOCATION TRACKING ACTIVE ✅✅✅');
-
     } catch (e) {
       errorMessage.value = 'Failed to initialize location tracking: $e';
       log_print.log('❌ Fatal location tracking error: $e');
@@ -6261,12 +7846,58 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  // Future<void> _updateBackgroundNotification() async {
+  //   try {
+  //     String title = 'Railway Crossing Alerts Active';
+  //     String body = 'Monitoring railway crossings in background';
+  //
+  //     // ✅ Show navigation status in notification
+  //     if (isNavigating.value) {
+  //       if (nearestCrossing.value != null) {
+  //         final distance = distanceToNearestCrossing.value;
+  //         title = 'Navigation Active';
+  //         body =
+  //             'Nearest crossing: ${nearestCrossing.value!.street ?? "Unknown"} (${formatDistance(distance)})';
+  //       } else {
+  //         title = 'Navigation Active';
+  //         body = 'Navigating to ${destinationAddress.value}';
+  //       }
+  //     }
+  //
+  //     const AndroidNotificationDetails androidDetails =
+  //         AndroidNotificationDetails(
+  //           'location_channel',
+  //           'Location Tracking',
+  //           channelDescription: 'Tracking railway crossings nearby',
+  //           importance: Importance.low,
+  //           priority: Priority.low,
+  //           ongoing: true,
+  //           enableLights: false,
+  //           enableVibration: false,
+  //           autoCancel: false,
+  //           showWhen: false,
+  //           icon: '@mipmap/ic_launcher',
+  //         );
+  //
+  //     const NotificationDetails notificationDetails = NotificationDetails(
+  //       android: androidDetails,
+  //     );
+  //
+  //     await flutterLocalNotificationsPlugin.show(
+  //       0, // Use ID 0 for persistent notification
+  //       title,
+  //       body,
+  //       notificationDetails,
+  //     );
+  //   } catch (e) {
+  //     log_print.log('Error updating background notification: $e');
+  //   }
+  // }
   Future<void> _updateBackgroundNotification() async {
     try {
       String title = 'Railway Crossing Alerts Active';
       String body = 'Monitoring railway crossings in background';
 
-      // ✅ Show navigation status in notification
       if (isNavigating.value) {
         if (nearestCrossing.value != null) {
           final distance = distanceToNearestCrossing.value;
@@ -6278,52 +7909,32 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         }
       }
 
-      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'location_channel',
-        'Location Tracking',
-        channelDescription: 'Tracking railway crossings nearby',
-        importance: Importance.low,
-        priority: Priority.low,
-        ongoing: true,
-        enableLights: false,
-        enableVibration: false,
-        autoCancel: false,
-        showWhen: false,
-        icon: '@mipmap/ic_launcher',
-      );
+      // ✅ FIXED: Use the method (handles singleton internally)
+      await NotificationService().showPersistentNotification(title, body);
 
-      const NotificationDetails notificationDetails = NotificationDetails(
-        android: androidDetails,
-      );
-
-      await flutterLocalNotificationsPlugin.show(
-        0, // Use ID 0 for persistent notification
-        title,
-        body,
-        notificationDetails,
-      );
     } catch (e) {
       log_print.log('Error updating background notification: $e');
     }
   }
-// ==========================================
-// 5. TESTING HELPER (Temporary)
-// ==========================================
-// આ method ઉમેરો testing માટે
-//   Future<void> testCrossingAlert() async {
-//     log_print.log('🧪 TESTING CROSSING ALERT');
-//
-//     if (nearbyLocations.isEmpty) {
-//       log_print.log('❌ No crossings available for testing');
-//       return;
-//     }
-//
-//     // First crossing લઈને test કરો
-//     final testCrossing = nearbyLocations.first;
-//     await _triggerProximityAlert(testCrossing, 75.0); // 75m distance for testing
-//
-//     log_print.log('✅ Test alert triggered');
-//   }
+
+  // ==========================================
+  // 5. TESTING HELPER (Temporary)
+  // ==========================================
+  // આ method ઉમેરો testing માટે
+  //   Future<void> testCrossingAlert() async {
+  //     log_print.log('🧪 TESTING CROSSING ALERT');
+  //
+  //     if (nearbyLocations.isEmpty) {
+  //       log_print.log('❌ No crossings available for testing');
+  //       return;
+  //     }
+  //
+  //     // First crossing લઈને test કરો
+  //     final testCrossing = nearbyLocations.first;
+  //     await _triggerProximityAlert(testCrossing, 75.0); // 75m distance for testing
+  //
+  //     log_print.log('✅ Test alert triggered');
+  //   }
   // Enhanced bearing calculation
   //10/10/2025
   // void _updateEnhancedBearing(Position position) {
@@ -6373,17 +7984,21 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
         if (rotationDiff > 180) {
           // Handle crossing 360° boundary
-          mapRotation.value = bearing > currentRotation ? bearing - 360 : bearing + 360;
+          mapRotation.value =
+              bearing > currentRotation ? bearing - 360 : bearing + 360;
         } else {
           // Smooth interpolation
-          mapRotation.value = currentRotation + (bearing - currentRotation) * 0.3;
+          mapRotation.value =
+              currentRotation + (bearing - currentRotation) * 0.3;
         }
 
         // Normalize to 0-360
         mapRotation.value = mapRotation.value % 360;
         userBearing.value = bearing;
 
-        log_print.log('🧭 Enhanced bearing: ${mapRotation.value.toStringAsFixed(1)}°');
+        log_print.log(
+          '🧭 Enhanced bearing: ${mapRotation.value.toStringAsFixed(1)}°',
+        );
       }
     } else if (position.headingAccuracy > 0 && position.headingAccuracy < 15) {
       // Use compass when stationary with good accuracy
@@ -6396,6 +8011,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       mapController.rotate(mapRotation.value);
     }
   }
+
   // Enhanced initialization that runs on page open and location refresh
   //   void initializeOnPageOpen() {
   //     log_print.log("🔄 Enhanced initialization on page open");
@@ -6518,10 +8134,11 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //     await speak("Warning! You are near a railway crossing");
   //   }
   // }
- // 08/10/2025 NEW
+  // 08/10/2025 NEW
   //13/10/2025
   final Map<String, DateTime> _lastAlertTimes = {};
   final Duration _alertCooldown = Duration(seconds: 30);
+
   //
   // Future<void> _triggerProximityAlert(
   //     TransportLocation crossing,
@@ -6637,9 +8254,9 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //   log_print.log('✅ Alert complete for ${crossing.street}');
   // }
   Future<void> _triggerProximityAlert(
-      TransportLocation crossing,
-      double distance,
-      ) async {
+    TransportLocation crossing,
+    double distance,
+  ) async {
     log_print.log('🚨 _triggerProximityAlert() called for ${crossing.street}');
 
     if (!settingController.isWarningsEnabled.value) {
@@ -6675,23 +8292,28 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       alertLevel = 'NEARBY';
     }
 
-    final message = '$alertLevel: Railway Crossing - ${crossing.street ?? "Unknown crossing"} (${formatDistance(distance)})';
+    final message =
+        '$alertLevel: Railway Crossing - ${crossing.street ?? "Unknown crossing"} (${formatDistance(distance)})';
     log_print.log('📢 Alert message: $message');
 
     // ✅ Use HIGH PRIORITY notification channel for alerts
-    const AndroidNotificationDetails androidAlertDetails = AndroidNotificationDetails(
-      'railway_crossing_alerts', // Different channel from persistent notification
-      'Railway Crossing Alerts',
-      channelDescription: 'High priority alerts for nearby railway crossings',
-      importance: Importance.high, // ✅ HIGH priority
-      priority: Priority.high,
-      enableLights: true,
-      enableVibration: true,
-      playSound: true,
-      autoCancel: true,
-      showWhen: true,
-      icon: '@mipmap/ic_launcher',
-    );
+    const AndroidNotificationDetails androidAlertDetails =
+        AndroidNotificationDetails(
+          'railway_crossing_alerts',
+          // Different channel from persistent notification
+          'Railway Crossing Alerts',
+          channelDescription:
+              'High priority alerts for nearby railway crossings',
+          importance: Importance.high,
+          // ✅ HIGH priority
+          priority: Priority.high,
+          enableLights: true,
+          enableVibration: true,
+          playSound: true,
+          autoCancel: true,
+          showWhen: true,
+          icon: '@mipmap/ic_launcher',
+        );
 
     const NotificationDetails alertNotificationDetails = NotificationDetails(
       android: androidAlertDetails,
@@ -6738,15 +8360,19 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     }
 
     // Voice (only if app is in foreground)
-    if (settingController.isWarningSoundEnabled.value && Get.context?.mounted == true) {
+    if (settingController.isWarningSoundEnabled.value &&
+        Get.context?.mounted == true) {
       try {
         String voiceMessage = '';
         if (distance < 50) {
-          voiceMessage = 'Warning! Railway crossing very close, only ${formatDistance(distance)} ahead';
+          voiceMessage =
+              'Warning! Railway crossing very close, only ${formatDistance(distance)} ahead';
         } else if (distance < 100) {
-          voiceMessage = 'Caution! Railway crossing ahead in ${formatDistance(distance)}';
+          voiceMessage =
+              'Caution! Railway crossing ahead in ${formatDistance(distance)}';
         } else {
-          voiceMessage = 'Railway crossing approaching in ${formatDistance(distance)}';
+          voiceMessage =
+              'Railway crossing approaching in ${formatDistance(distance)}';
         }
         await speak(voiceMessage);
         log_print.log('✅ Voice alert spoken: $voiceMessage');
@@ -6757,9 +8383,10 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     log_print.log('✅ Alert complete for ${crossing.street}');
   }
-// ==========================================
-// TESTING BUTTON (Add to your UI)
-// ==========================================
+
+  // ==========================================
+  // TESTING BUTTON (Add to your UI)
+  // ==========================================
   Future<void> testBackgroundAlert() async {
     log_print.log('');
     log_print.log('🧪🧪🧪 MANUAL BACKGROUND TEST 🧪🧪🧪');
@@ -6767,11 +8394,15 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     log_print.log('Current State:');
     log_print.log('  • App in background: ${!Get.context!.mounted}');
     log_print.log('  • Location stream active: ${_positionStream != null}');
-    log_print.log('  • User position: ${userPosition.value?.latitude}, ${userPosition.value?.longitude}');
+    log_print.log(
+      '  • User position: ${userPosition.value?.latitude}, ${userPosition.value?.longitude}',
+    );
     log_print.log('  • Is navigating: ${isNavigating.value}');
     log_print.log('  • Nearby crossings: ${nearbyLocations.length}');
     log_print.log('  • Route crossings: ${crossingsAlongRoute.length}');
-    log_print.log('  • Warnings enabled: ${settingController.isWarningsEnabled.value}');
+    log_print.log(
+      '  • Warnings enabled: ${settingController.isWarningsEnabled.value}',
+    );
     log_print.log('─────────────────────────────────────');
 
     if (nearbyLocations.isEmpty) {
@@ -6784,7 +8415,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           userPosition.value!.latitude,
           userPosition.value!.longitude,
         );
-        final cityName = placemarks.isNotEmpty ? placemarks[0].locality?.toUpperCase() : '';
+        final cityName =
+            placemarks.isNotEmpty ? placemarks[0].locality?.toUpperCase() : '';
         await fetchLocations(cityName: cityName ?? "");
         log_print.log('✅ Crossings fetched: ${nearbyLocations.length}');
       }
@@ -6793,7 +8425,9 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (nearbyLocations.isNotEmpty) {
       final testCrossing = nearbyLocations.first;
       log_print.log('Testing with crossing: ${testCrossing.street}');
-      log_print.log('Location: ${testCrossing.latitude}, ${testCrossing.longitude}');
+      log_print.log(
+        'Location: ${testCrossing.latitude}, ${testCrossing.longitude}',
+      );
 
       await _triggerProximityAlert(testCrossing, 75.0);
 
@@ -6803,7 +8437,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     log_print.log('═══════════════════════════════════════');
   }
 
-// ✅ Add this to check stream status
+  // ✅ Add this to check stream status
   void debugLocationStream() {
     log_print.log('');
     log_print.log('🔍 LOCATION STREAM DEBUG');
@@ -6813,20 +8447,25 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     log_print.log('  • Stream paused: ${_positionStream?.isPaused ?? "N/A"}');
     log_print.log('  • Tracking active: ${isTrackingLocation.value}');
     log_print.log('  • Last position time: ${userPosition.value?.timestamp}');
-    log_print.log('  • Position age: ${userPosition.value != null ? DateTime.now().difference(userPosition.value!.timestamp).inSeconds : "N/A"}s');
+    log_print.log(
+      '  • Position age: ${userPosition.value != null ? DateTime.now().difference(userPosition.value!.timestamp).inSeconds : "N/A"}s',
+    );
     log_print.log('═══════════════════════════════════════');
     log_print.log('');
   }
 
-// ✅ Call this every 10 seconds when app is in background
+  // ✅ Call this every 10 seconds when app is in background
   Timer? _debugTimer;
 
   void startBackgroundDebugTimer() {
     _debugTimer?.cancel();
     _debugTimer = Timer.periodic(Duration(seconds: 10), (timer) {
-      if (!Get.context!.mounted) { // App is in background
+      if (!Get.context!.mounted) {
+        // App is in background
         debugLocationStream();
-        log_print.log('⏰ Background check: Location updates ${DateTime.now().difference(userPosition.value?.timestamp ?? DateTime.now()).inSeconds}s ago');
+        log_print.log(
+          '⏰ Background check: Location updates ${DateTime.now().difference(userPosition.value?.timestamp ?? DateTime.now()).inSeconds}s ago',
+        );
       }
     });
   }
@@ -6840,9 +8479,13 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     log_print.log('🧪 MANUAL TEST ALERT');
     log_print.log('═══════════════════════════════════════');
 
-    log_print.log('User position: ${userPosition.value?.latitude}, ${userPosition.value?.longitude}');
+    log_print.log(
+      'User position: ${userPosition.value?.latitude}, ${userPosition.value?.longitude}',
+    );
     log_print.log('Nearby crossings count: ${nearbyLocations.length}');
-    log_print.log('Warnings enabled: ${settingController.isWarningsEnabled.value}');
+    log_print.log(
+      'Warnings enabled: ${settingController.isWarningsEnabled.value}',
+    );
 
     if (nearbyLocations.isEmpty) {
       log_print.log('❌ No crossings available for testing');

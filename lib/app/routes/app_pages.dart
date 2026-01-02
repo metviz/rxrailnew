@@ -10,6 +10,8 @@ import '../modules/crossing/bindings/crossing_binding.dart';
 import '../modules/crossing/views/crossing_view.dart';
 import '../modules/crossing_detail/bindings/crossing_detail_binding.dart';
 import '../modules/crossing_detail/views/crossing_detail_view.dart';
+import '../modules/disclaimer/bindings/disclaimer_binding.dart';
+import '../modules/disclaimer/views/disclaimer_view.dart';
 import '../modules/login/bindings/login_binding.dart';
 import '../modules/login/views/login_view.dart';
 import '../modules/news/bindings/news_binding.dart';
@@ -80,6 +82,11 @@ class AppPages {
       name: _Paths.BLOG,
       page: () => const BlogView(),
       binding: BlogBinding(),
+    ),
+    GetPage(
+      name: _Paths.DISCLAIMER,
+      page: () => const DisclaimerView(),
+      binding: DisclaimerBinding(),
     ),
   ];
 }

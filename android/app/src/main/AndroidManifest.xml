@@ -52,6 +52,12 @@
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+
+        <!-- ✅ Add this for Android 14+ -->
+        <service
+            android:name="id.flutter.flutter_background_service.BackgroundService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

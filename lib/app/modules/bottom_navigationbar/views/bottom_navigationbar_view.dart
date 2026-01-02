@@ -109,98 +109,115 @@ class BottomNavigationbarView extends GetView<BottomNavigationbarController> {
 
   Widget _buildDrawer(BuildContext context) {
     return Drawer(
-      width: MediaQuery.of(context).size.width * 0.75, // 75% of screen width
+      width: MediaQuery.of(context).size.width * 0.75,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.only(
-          topRight: Radius.circular(20.r),
+          // topRight: Radius.circular(20.r),
           bottomRight: Radius.circular(20.r),
         ),
       ),
       child: SafeArea(
         child: Container(
-          decoration: BoxDecoration(color: AppColors.colorFFFFFF),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.white, Color(0xFFFFF8E1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
               // Drawer Header
               Container(
-                height: 180.h,
+                height: 190.h,
                 decoration: BoxDecoration(
-                  color: Color(0xFFFFC107).withOpacity(0.1),
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFFFC107), Color(0xFFFFD54F)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      offset: Offset(0, 4),
+                      blurRadius: 10,
+                    ),
+                  ],
+                  borderRadius: BorderRadius.only(
+                    // topRight: Radius.circular(20.r),
+                    bottomRight: Radius.circular(40.r),
+                  ),
                 ),
-                padding: EdgeInsets.symmetric(horizontal: 20.w),
+                padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 20.h),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(height: 20.h),
                     CircleAvatar(
-                      radius: 25.r,
-                      backgroundColor: Color(0xFFFFC107).withOpacity(0.2),
+                      radius: 30.r,
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
                       child: Icon(
-                        Icons.train,
-                        size: 30.w,
-                        color: Color(0xFFFFC107),
+                        Icons.train_rounded,
+                        size: 36.w,
+                        color: AppColors.color171712,
                       ),
                     ),
                     SizedBox(height: 16.h),
                     Text(
-                      'RXrail',
-                      style: styleW700(
-                        size: 18.sp,
+                      'RXRail',
+                      style: TextStyle(
+                        fontSize: 20.sp,
+                        fontWeight: FontWeight.bold,
                         color: AppColors.color171712,
+                        letterSpacing: 0.5,
                       ),
                     ),
-                    SizedBox(height: 8.h),
+                    SizedBox(height: 6.h),
                     Text(
                       'Railway Crossing Safety',
-                      style: styleW400(
-                        size: 14.sp,
-                        color: AppColors.color8C8C5E,
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        color: AppColors.color171712,
                       ),
                     ),
                   ],
                 ),
               ),
 
+              SizedBox(height: 10.h),
+
               // Drawer Items
               _buildDrawerItem(
-                icon: Icons.home,
+                icon: Icons.home_rounded,
                 title: 'Home',
                 onTap: () {
                   controller.changePage(0);
-                  // Navigator.pop(context);
                 },
               ),
               _buildDrawerItem(
-                icon: Icons.info_outline,
+                icon: Icons.info_outline_rounded,
                 title: 'About',
                 onTap: () {
                   Get.toNamed(Routes.ABOUT);
-                  // Navigator.pop(context);
                 },
               ),
               _buildDrawerItem(
-                icon: Icons.newspaper,
+                icon: Icons.newspaper_rounded,
                 title: 'News',
-                // onTap: () {
-                //   Get.toNamed(Routes.NEWS, arguments: {'state': 'NC'});
-                //   // Navigator.pop(context);
-                // },
                 onTap: () {
                   final controller = Get.find<BottomNavigationbarController>();
                   controller.openNews();
                 },
               ),
               _buildDrawerItem(
-                icon: Icons.article,
+                icon: Icons.ondemand_video_rounded,
                 title: 'Safety Videos',
                 onTap: () {
                   Get.toNamed(Routes.BLOG);
-                  // Navigator.pop(context);
                 },
               ),
               _buildDrawerItem(
-                icon: Icons.settings,
+                icon: Icons.settings_rounded,
                 title: 'Settings',
                 onTap: () {
                   controller.changePage(1);
@@ -208,16 +225,23 @@ class BottomNavigationbarView extends GetView<BottomNavigationbarController> {
                 },
               ),
 
-              // Divider and Version Info
-              Divider(height: 40.h, thickness: 1, color: Colors.grey[200]),
+              SizedBox(height: 20.h),
+              Divider(
+                thickness: 0.8,
+                indent: 20.w,
+                endIndent: 20.w,
+                color: Colors.grey.shade300,
+              ),
               Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20.w),
+                padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h),
                 child: Text(
                   'Version 1.0.0',
-                  style: styleW400(size: 12.sp, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    color: Colors.grey.shade600,
+                  ),
                 ),
               ),
-              SizedBox(height: 20.h),
             ],
           ),
         ),
@@ -225,21 +249,52 @@ class BottomNavigationbarView extends GetView<BottomNavigationbarController> {
     );
   }
 
+  /// Reusable drawer item with hover/tap feedback
   Widget _buildDrawerItem({
     required IconData icon,
     required String title,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      leading: Icon(icon, size: 24.w, color: AppColors.color171712),
-      title: Text(
-        title,
-        style: styleW600(size: 16.sp, color: AppColors.color171712),
-      ),
-      contentPadding: EdgeInsets.symmetric(horizontal: 20.w),
-      minLeadingWidth: 0,
-      horizontalTitleGap: 8.w,
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(12.r),
+      splashColor: Color(0xFFFFC107).withValues(alpha: 0.3),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+        child: Row(
+          children: [
+            Icon(icon, color: Color(0xFFFFC107), size: 22.w),
+            SizedBox(width: 16.w),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14.sp,
+                color: AppColors.color171712,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
+
+
+  // Widget _buildDrawerItem({
+  //   required IconData icon,
+  //   required String title,
+  //   required VoidCallback onTap,
+  // }) {
+  //   return ListTile(
+  //     leading: Icon(icon, size: 24.w, color: AppColors.color171712),
+  //     title: Text(
+  //       title,
+  //       style: styleW600(size: 16.sp, color: AppColors.color171712),
+  //     ),
+  //     contentPadding: EdgeInsets.symmetric(horizontal: 20.w),
+  //     minLeadingWidth: 0,
+  //     horizontalTitleGap: 8.w,
+  //     onTap: onTap,
+  //   );
+  // }
 }

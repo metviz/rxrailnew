@@ -449,14 +449,19 @@ class CrossingView extends GetView<CrossingController> {
               builder: (context, snapshot) {
                 if (snapshot.hasData && snapshot.data != null) {
                   return TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.cross_aware',
-                    tileProvider: FMTCStore('offline_tiles_${snapshot.data}').getTileProvider(),
+                    tileProvider:
+                        FMTCStore(
+                          'offline_tiles_${snapshot.data}',
+                        ).getTileProvider(),
                   );
                 }
                 // Fallback to online if state detection fails
                 return TileLayer(
-                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                  urlTemplate:
+                      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                   subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.example.cross_aware',
                 );
@@ -464,12 +469,14 @@ class CrossingView extends GetView<CrossingController> {
             )
           else
             TileLayer(
-              urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+              urlTemplate:
+                  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
               subdomains: const ['a', 'b', 'c', 'd'],
               userAgentPackageName: 'com.example.cross_aware',
             ),
           TileLayer(
-            urlTemplate: 'https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
+            urlTemplate:
+                'https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',
             subdomains: const ['a', 'b', 'c'],
             backgroundColor: Colors.transparent,
           ),

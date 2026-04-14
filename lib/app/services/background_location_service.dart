@@ -17,9 +17,36 @@ class BackgroundLocationService extends GetxService {
   // Callback for location updates
   Function(Position)? onLocationUpdate;
 
+  void _startReceivePort() {
+    FlutterForegroundTask.receivePort?.listen((data) {
+      if (data is Map && data['type'] == 'location') {
+        try {
+          final position = Position(
+            latitude: (data['latitude'] as num).toDouble(),
+            longitude: (data['longitude'] as num).toDouble(),
+            accuracy: (data['accuracy'] as num).toDouble(),
+            altitude: 0.0,
+            heading: 0.0,
+            speed: 0.0,
+            timestamp: DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int),
+            speedAccuracy: 0.0,
+            altitudeAccuracy: 0.0,
+            headingAccuracy: 0.0,
+          );
+          currentPosition.value = position;
+          onLocationUpdate?.call(position);
+        } catch (e) {
+          log.log('Error parsing location from task: $e');
+        }
+      }
+    });
+  }
+
   @override
   void onInit() {
     super.onInit();
+    _initForegroundTask();
+    _startReceivePort();
     _checkIfServiceWasRunning();
   }
 
@@ -33,48 +60,49 @@ class BackgroundLocationService extends GetxService {
     }
   }
 
+  void _initForegroundTask() {
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'railway_crossing_location',
+        channelName: 'Railway Crossing Location Tracking',
+        channelDescription: 'Continuous location tracking for railway crossing alerts',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+        iconData: const NotificationIconData(
+          resType: ResourceType.mipmap,
+          resPrefix: ResourcePrefix.ic,
+          name: 'launcher',
+        ),
+        buttons: [
+          const NotificationButton(
+            id: 'stop_tracking',
+            text: 'Stop Tracking',
+          ),
+        ],
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(
+        showNotification: true,
+        playSound: false,
+      ),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(5000),
+        autoRunOnBoot: true,
+        autoRunOnMyPackageReplaced: true,
+        allowWakeLock: true,
+        allowWifiLock: false,
+      ),
+    );
+  }
+
   Future<bool> startBackgroundTracking() async {
     try {
       // Check location permissions
       final permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || 
+      if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         log.log('❌ Location permission denied');
         return false;
       }
-
-      // Initialize foreground task
-      FlutterForegroundTask.init(
-        androidNotificationOptions: AndroidNotificationOptions(
-          channelId: 'railway_crossing_location',
-          channelName: 'Railway Crossing Location Tracking',
-          channelDescription: 'Continuous location tracking for railway crossing alerts',
-          channelImportance: NotificationChannelImportance.LOW,
-          priority: NotificationPriority.LOW,
-          iconData: const NotificationIconData(
-            resType: ResourceType.mipmap,
-            resPrefix: ResourcePrefix.ic,
-            name: 'launcher',
-          ),
-          buttons: [
-            const NotificationButton(
-              id: 'stop_tracking',
-              text: 'Stop Tracking',
-            ),
-          ],
-        ),
-        iosNotificationOptions: const IOSNotificationOptions(
-          showNotification: true,
-          playSound: false,
-        ),
-        foregroundTaskOptions: ForegroundTaskOptions(
-          eventAction: ForegroundTaskEventAction.repeat(5000), // Every 5 seconds
-          autoRunOnBoot: true,
-          autoRunOnMyPackageReplaced: true,
-          allowWakeLock: true,
-          allowWifiLock: false,
-        ),
-      );
 
       // Start foreground service
       final started = await FlutterForegroundTask.startService(

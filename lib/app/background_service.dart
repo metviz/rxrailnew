@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:isolate';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:get/get.dart';
 
@@ -20,19 +19,13 @@ class BackgroundService {
         channelDescription: 'Notification channel for railway crossing alerts',
         channelImportance: NotificationChannelImportance.HIGH,
         priority: NotificationPriority.HIGH,
-        iconData: const NotificationIconData(
-          resType: ResourceType.mipmap,
-          resPrefix: ResourcePrefix.ic,
-          name: 'launcher',
-        ),
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: true,
         playSound: true,
       ),
-      foregroundTaskOptions: const ForegroundTaskOptions(
-        interval: 5000,
-        isOnceEvent: false,
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(5000),
         autoRunOnBoot: true,
         allowWakeLock: true,
         allowWifiLock: true,
@@ -42,19 +35,21 @@ class BackgroundService {
 
   Future<bool> startForegroundService() async {
     if (!await FlutterForegroundTask.isRunningService) {
-      return await FlutterForegroundTask.startService(
+      final result = await FlutterForegroundTask.startService(
         serviceId: _serviceId,
         notificationTitle: 'Railway Crossing Alerts Active',
         notificationText: 'Monitoring for nearby railway crossings',
         callback: startBackgroundTask,
       );
+      return result is ServiceRequestSuccess;
     }
     return false;
   }
 
   Future<bool> stopForegroundService() async {
     if (await FlutterForegroundTask.isRunningService) {
-      return await FlutterForegroundTask.stopService();
+      final result = await FlutterForegroundTask.stopService();
+      return result is ServiceRequestSuccess;
     }
     return false;
   }
@@ -66,41 +61,33 @@ void startBackgroundTask() {
 }
 
 class BackgroundTaskHandler extends TaskHandler {
-  SendPort? _sendPort;
   CrossingController? _controller;
 
   @override
-  Future<void> onStart(DateTime timestamp, SendPort? sendPort) async {
-    _sendPort = sendPort;
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     // Initialize GetX in the background isolate
     Get.create(() => CrossingController());
     _controller = Get.find<CrossingController>();
   }
 
   @override
-  Future<void> onEvent(DateTime timestamp, SendPort? sendPort) async {
+  void onRepeatEvent(DateTime timestamp) {
+    _runEvent(timestamp);
+  }
+
+  Future<void> _runEvent(DateTime timestamp) async {
     try {
       if (_controller?.userPosition.value != null) {
         await _controller?.checkNearbyCrossings();
       }
-
-      // Send data to the main isolate
-      _sendPort?.send(timestamp);
+      FlutterForegroundTask.sendDataToMain(timestamp.millisecondsSinceEpoch);
     } catch (e) {
       print('Background task error: $e');
     }
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp, SendPort? sendPort) async {
-    // Clean up resources
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     _controller = null;
-  }
-
-  // 👇 add this new method
-  @override
-  void onRepeatEvent(DateTime timestamp, SendPort? sendPort) {
-    // Optional: can be left empty if not used
-    // print('[log] 🔁 onRepeatEvent triggered at $timestamp');
   }
 }

@@ -78,17 +78,6 @@ class BackgroundLocationService extends GetxService {
         channelDescription: 'Continuous location tracking for railway crossing alerts',
         channelImportance: NotificationChannelImportance.LOW,
         priority: NotificationPriority.LOW,
-        iconData: const NotificationIconData(
-          resType: ResourceType.mipmap,
-          resPrefix: ResourcePrefix.ic,
-          name: 'launcher',
-        ),
-        buttons: [
-          const NotificationButton(
-            id: 'stop_tracking',
-            text: 'Stop Tracking',
-          ),
-        ],
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: true,
@@ -115,21 +104,24 @@ class BackgroundLocationService extends GetxService {
       }
 
       // Start foreground service
-      final started = await FlutterForegroundTask.startService(
+      final result = await FlutterForegroundTask.startService(
         serviceId: _serviceId,
         notificationTitle: 'RXrail Active',
         notificationText: 'Monitoring for railway crossings',
+        notificationButtons: [
+          const NotificationButton(id: 'stop_tracking', text: 'Stop Tracking'),
+        ],
         callback: startLocationTracking,
       );
 
-      if (started) {
+      if (result is ServiceRequestSuccess) {
         isRunning.value = true;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(_isServiceRunningKey, true);
         log.log('✅ Background location service started');
         return true;
       }
-      
+
       return false;
     } catch (e) {
       log.log('❌ Error starting background service: $e');
@@ -139,16 +131,16 @@ class BackgroundLocationService extends GetxService {
 
   Future<bool> stopBackgroundTracking() async {
     try {
-      final stopped = await FlutterForegroundTask.stopService();
-      
-      if (stopped) {
+      final result = await FlutterForegroundTask.stopService();
+
+      if (result is ServiceRequestSuccess) {
         isRunning.value = false;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(_isServiceRunningKey, false);
         log.log('✅ Background location service stopped');
       }
-      
-      return stopped;
+
+      return result is ServiceRequestSuccess;
     } catch (e) {
       log.log('❌ Error stopping background service: $e');
       return false;
@@ -252,7 +244,6 @@ void startLocationTracking() {
 
 class LocationTaskHandler extends TaskHandler {
   StreamSubscription<Position>? _positionStream;
-  SendPort? _sendPort;
 
   /// Crossings we've already alerted for. Cleared when user moves >2x warning distance away.
   final Set<String> _alertedCrossings = {};
@@ -263,8 +254,7 @@ class LocationTaskHandler extends TaskHandler {
   Position? _lastPosition;
 
   @override
-  Future<void> onStart(DateTime timestamp, TaskData? taskData) async {
-    _sendPort = taskData?.sendPort;
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     log.log('🚀 Location tracking started');
     
     // Start listening to location updates
@@ -289,7 +279,7 @@ class LocationTaskHandler extends TaskHandler {
         await _savePositionToPrefs(position);
         
         // Send to main isolate
-        _sendPort?.send({
+        FlutterForegroundTask.sendDataToMain({
           'type': 'location',
           'latitude': position.latitude,
           'longitude': position.longitude,
@@ -307,7 +297,11 @@ class LocationTaskHandler extends TaskHandler {
   }
 
   @override
-  Future<void> onRepeatEvent(DateTime timestamp, TaskData? taskData) async {
+  void onRepeatEvent(DateTime timestamp) {
+    _checkProximity();
+  }
+
+  Future<void> _checkProximity() async {
     try {
       // 1. Use position from the running stream
       final position = _lastPosition;
@@ -369,7 +363,7 @@ class LocationTaskHandler extends TaskHandler {
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp, TaskData? taskData) async {
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     log.log('🛑 Location tracking stopped');
     await _positionStream?.cancel();
     _positionStream = null;

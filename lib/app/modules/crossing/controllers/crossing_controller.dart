@@ -1188,18 +1188,13 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         channelDescription: 'Shows progress of offline map download',
         channelImportance: fg.NotificationChannelImportance.LOW,
         priority: fg.NotificationPriority.LOW,
-        iconData: const fg.NotificationIconData(
-          resType: fg.ResourceType.mipmap,
-          resPrefix: fg.ResourcePrefix.ic,
-          name: 'launcher',
-        ),
       ),
       iosNotificationOptions: const fg.IOSNotificationOptions(
         showNotification: true,
         playSound: false,
       ),
-      foregroundTaskOptions: const fg.ForegroundTaskOptions(
-        interval: 2000, // Update every 2 seconds
+      foregroundTaskOptions: fg.ForegroundTaskOptions(
+        eventAction: fg.ForegroundTaskEventAction.repeat(2000),
         autoRunOnBoot: false,
         allowWakeLock: true,
         allowWifiLock: false,

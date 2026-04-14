@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:developer' as log;
+import 'package:RXrail/app/services/crossing_cache_service.dart';
 
 class BackgroundLocationService extends GetxService {
   static const String _lastPositionKey = 'last_position';
@@ -190,6 +193,56 @@ class BackgroundLocationService extends GetxService {
 const String _kLastPositionKey = 'last_position';
 const int _kDistanceFilterMeters = 10;
 
+/// Returns distance in meters between two lat/lng points.
+double _haversineDistanceMeters(
+  double lat1, double lon1,
+  double lat2, double lon2,
+) {
+  const r = 6371000.0; // Earth radius in meters
+  final dLat = (lat2 - lat1) * math.pi / 180;
+  final dLon = (lon2 - lon1) * math.pi / 180;
+  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(lat1 * math.pi / 180) *
+          math.cos(lat2 * math.pi / 180) *
+          math.sin(dLon / 2) *
+          math.sin(dLon / 2);
+  return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+}
+
+/// Fire a high-priority crossing alert from within the background isolate.
+/// Uses a stable notification ID per crossing so repeated firings
+/// update the same notification rather than stacking.
+Future<void> _showCrossingAlert(String crossingId, String street, double distanceMeters) async {
+  final plugin = FlutterLocalNotificationsPlugin();
+  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  await plugin.initialize(const InitializationSettings(android: androidInit));
+
+  final distanceText = distanceMeters < 1000
+      ? '${distanceMeters.round()}m away'
+      : '${(distanceMeters / 1000).toStringAsFixed(1)}km away';
+
+  const androidDetails = AndroidNotificationDetails(
+    'railwaycrossingalerts',
+    'Railway Crossing Alerts',
+    channelDescription: 'High priority alerts for nearby railway crossings',
+    importance: Importance.high,
+    priority: Priority.high,
+    enableLights: true,
+    enableVibration: true,
+    playSound: true,
+    autoCancel: false,
+    icon: '@mipmap/ic_launcher',
+  );
+
+  final notifId = crossingId.hashCode.abs() % 10000;
+  await plugin.show(
+    notifId,
+    '⚠️ Railway Crossing Ahead',
+    '$street — $distanceText',
+    const NotificationDetails(android: androidDetails),
+  );
+}
+
 // Top-level callback function
 @pragma('vm:entry-point')
 void startLocationTracking() {
@@ -199,6 +252,9 @@ void startLocationTracking() {
 class LocationTaskHandler extends TaskHandler {
   StreamSubscription<Position>? _positionStream;
   SendPort? _sendPort;
+
+  /// Crossings we've already alerted for. Cleared when user moves >2x warning distance away.
+  final Set<String> _alertedCrossings = {};
 
   @override
   Future<void> onStart(DateTime timestamp, TaskData? taskData) async {
@@ -240,8 +296,65 @@ class LocationTaskHandler extends TaskHandler {
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp, TaskData? taskData) async {
-    // Called every 5 seconds - can be used for periodic checks
-    log.log('⏰ Periodic check: ${timestamp}');
+    try {
+      // 1. Get current position
+      Position position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+          ),
+        );
+      } catch (e) {
+        log.log('⏰ onRepeatEvent: could not get position: $e');
+        return;
+      }
+
+      // 2. Load settings from SharedPreferences (isolate-safe)
+      final settings = await CrossingCacheService.loadWarningSettings();
+      if (!settings.enabled) return;
+
+      // 3. Load crossings from SharedPreferences
+      final crossings = await CrossingCacheService.loadCrossings();
+      if (crossings.isEmpty) {
+        log.log('⏰ onRepeatEvent: no cached crossings');
+        return;
+      }
+
+      // 4. Check each crossing
+      final double threshold = settings.distanceMeters;
+      final Set<String> nowNear = {};
+
+      for (final crossing in crossings) {
+        final id = crossing['crossingid'] as String? ?? '';
+        final lat = double.tryParse(crossing['latitude'] as String? ?? '') ?? 0;
+        final lng = double.tryParse(crossing['longitude'] as String? ?? '') ?? 0;
+        final street = crossing['street'] as String? ?? 'Railway Crossing';
+
+        if (lat == 0 || lng == 0) continue;
+
+        final distance = _haversineDistanceMeters(
+          position.latitude, position.longitude, lat, lng,
+        );
+
+        if (distance <= threshold) {
+          nowNear.add(id);
+          if (!_alertedCrossings.contains(id)) {
+            _alertedCrossings.add(id);
+            log.log('🔔 Crossing alert: $street — ${distance.round()}m');
+            await _showCrossingAlert(id, street, distance);
+          }
+        }
+      }
+
+      // 5. Clear alerts for crossings the user has left (>2x threshold = re-alert on return)
+      _alertedCrossings.removeWhere((id) => !nowNear.contains(id));
+
+      log.log('⏰ onRepeatEvent: checked ${crossings.length} crossings at '
+          '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}');
+    } catch (e) {
+      log.log('❌ onRepeatEvent error: $e');
+    }
   }
 
   @override

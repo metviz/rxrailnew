@@ -5,8 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'dart:async';
-import 'package:permission_handler/permission_handler.dart';
-
+import 'package:RXrail/app/utils/permission_helper.dart';
 import '../modules/crossing/controllers/crossing_controller.dart';
 import '../notification_service.dart';
 
@@ -78,48 +77,7 @@ class GeofencingService extends GetxService {
   }
 
   Future<bool> requestBackgroundPermission() async {
-    bool hasPermission = false;
-
-    // First check if we already have the permission
-    if (await Permission.locationAlways.isGranted) {
-      return true;
-    }
-
-    // Request the permission
-    try {
-      final status = await Permission.locationAlways.request();
-      hasPermission = status.isGranted;
-
-      if (!hasPermission) {
-        // Show a dialog explaining why we need background permission
-        Get.dialog(
-          AlertDialog(
-            title: Text('Background Location Required'),
-            content: Text(
-                'To receive notifications about nearby rail crossings even when the app is not open, ' +
-                    'please grant "Allow all the time" location permission in settings.'
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Get.back(),
-                child: Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Get.back();
-                  openAppSettings();
-                },
-                child: Text('Open Settings'),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      print("Error requesting background permission: $e");
-    }
-
-    return hasPermission;
+    return PermissionHelper.requestBackgroundLocation();
   }
 
   Future<void> startGeofencing() async {

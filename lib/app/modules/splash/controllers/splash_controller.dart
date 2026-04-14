@@ -4,6 +4,7 @@ import '../../../routes/app_pages.dart';
 import '../../../shared_preferences/preference_key.dart';
 import '../../../shared_preferences/preference_manager.dart';
 import '../../crossing/controllers/crossing_controller.dart';
+import '../../../services/background_location_service.dart';
 import 'package:flutter/material.dart';
 
 class SplashController extends GetxController {
@@ -20,6 +21,7 @@ class SplashController extends GetxController {
       // Initialize controllers
       final settingController = Get.put(SettingController(), permanent: true);
       final crossingController = Get.put(CrossingController(), permanent: true);
+      Get.put(BackgroundLocationService(), permanent: true);
       settingController.crossingController = crossingController;
 
       // Read stored flag

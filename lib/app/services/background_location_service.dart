@@ -10,7 +10,8 @@ import 'dart:developer' as log;
 class BackgroundLocationService extends GetxService {
   static const String _lastPositionKey = 'last_position';
   static const String _isServiceRunningKey = 'is_service_running';
-  
+  static const int _repeatIntervalMs = 5000;
+
   final isRunning = false.obs;
   final Rxn<Position> currentPosition = Rxn<Position>();
   
@@ -91,7 +92,7 @@ class BackgroundLocationService extends GetxService {
         playSound: false,
       ),
       foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.repeat(5000),
+        eventAction: ForegroundTaskEventAction.repeat(_repeatIntervalMs),
         autoRunOnBoot: true,
         autoRunOnMyPackageReplaced: true,
         allowWakeLock: true,
@@ -203,6 +204,9 @@ class BackgroundLocationService extends GetxService {
   }
 }
 
+// Top-level constants
+const int _kDistanceFilterMeters = 10;
+
 // Top-level callback function
 @pragma('vm:entry-point')
 void startLocationTracking() {
@@ -221,7 +225,7 @@ class LocationTaskHandler extends TaskHandler {
     // Start listening to location updates
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 10, // Update every 10 meters
+      distanceFilter: _kDistanceFilterMeters, // Update every 10 meters
     );
 
     _positionStream = Geolocator.getPositionStream(

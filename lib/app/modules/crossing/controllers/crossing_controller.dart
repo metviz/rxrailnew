@@ -25,6 +25,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:workmanager/workmanager.dart';
 import '../../../background_service.dart';
 import '../../../notification_service.dart';
+import '../../../services/crossing_cache_service.dart';
 import '../../../routes/app_pages.dart';
 import '../../../utils/app_color.dart';
 import '../../../utils/text_style.dart';
@@ -2790,6 +2791,15 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         }
 
         nearbyLocations.assignAll(uniqueLocations.values.toList());
+        // Persist to SharedPreferences for background isolate
+        CrossingCacheService.saveCrossings(
+          nearbyLocations.map((c) => {
+            'crossingid': c.crossingid ?? '',
+            'latitude': c.latitude ?? '0',
+            'longitude': c.longitude ?? '0',
+            'street': c.street ?? 'Railway Crossing',
+          }).toList(),
+        );
       } else {
         errorMessage.value = "Failed to fetch data.";
       }

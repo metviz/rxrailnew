@@ -329,7 +329,6 @@ class LocationTaskHandler extends TaskHandler {
 
       // 4. Check each crossing
       final double threshold = settings.distanceMeters;
-      final Set<String> nowNear = {};
       final Set<String> stillNear = {}; // hysteresis zone: within 2x threshold
 
       for (final crossing in crossings) {
@@ -349,7 +348,6 @@ class LocationTaskHandler extends TaskHandler {
           stillNear.add(id); // within hysteresis zone — keep alert state
         }
         if (distance <= threshold) {
-          nowNear.add(id);
           if (!_alertedCrossings.contains(id)) {
             _alertedCrossings.add(id);
             log.log('🔔 Crossing alert: $street — ${distance.round()}m');

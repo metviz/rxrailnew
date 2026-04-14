@@ -352,7 +352,7 @@ class SettingView extends GetView<SettingController> {
               padding: EdgeInsets.all(8.w),
               value: controller.warningDistance.value,
               min: 100,
-              max: 500,
+              max: 2000,
               onChanged: controller.updateWarningDistance,
             ),
           ),

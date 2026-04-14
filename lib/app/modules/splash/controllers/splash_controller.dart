@@ -35,6 +35,9 @@ class SplashController extends GetxController {
         try {
           await crossingController.initializeLocationServices();
           await crossingController.fetchInitialLocation();
+          // Start background proximity alerting after permissions are granted
+          final bgService = Get.find<BackgroundLocationService>();
+          await bgService.startBackgroundTracking();
         } catch (e) {
           print("⚠️ Location init error: $e");
         }

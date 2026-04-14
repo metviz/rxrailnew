@@ -303,11 +303,33 @@ class LocationTaskHandler extends TaskHandler {
 
   Future<void> _checkProximity() async {
     try {
-      // 1. Use position from the running stream
-      final position = _lastPosition;
+      // 1. Use stream position, fall back to last saved SharedPreferences position
+      Position? position = _lastPosition;
       if (position == null) {
-        log.log('⏰ onRepeatEvent: no position yet');
-        return;
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString(_kLastPositionKey);
+        if (raw != null) {
+          try {
+            final data = jsonDecode(raw) as Map<String, dynamic>;
+            position = Position(
+              latitude: (data['latitude'] as num).toDouble(),
+              longitude: (data['longitude'] as num).toDouble(),
+              accuracy: (data['accuracy'] as num? ?? 0).toDouble(),
+              altitude: 0.0,
+              heading: 0.0,
+              speed: 0.0,
+              timestamp: DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int),
+              speedAccuracy: 0.0,
+              altitudeAccuracy: 0.0,
+              headingAccuracy: 0.0,
+            );
+            print('⏰ _checkProximity: using saved position ${position.latitude}, ${position.longitude}');
+          } catch (_) {}
+        }
+        if (position == null) {
+          print('⏰ _checkProximity: no position available yet');
+          return;
+        }
       }
 
       // 2. Load settings from SharedPreferences (isolate-safe)
@@ -344,7 +366,7 @@ class LocationTaskHandler extends TaskHandler {
         if (distance <= threshold) {
           if (!_alertedCrossings.contains(id)) {
             _alertedCrossings.add(id);
-            log.log('🔔 Crossing alert: $street — ${distance.round()}m');
+            print('🔔 BG Crossing alert: $street — ${distance.round()}m');
             if (_notifInitialized) {
               await _showCrossingAlert(_notifPlugin, id, street, distance);
             }
@@ -355,8 +377,8 @@ class LocationTaskHandler extends TaskHandler {
       // 5. Only evict from alerted set when user is >2x threshold away (hysteresis)
       _alertedCrossings.removeWhere((id) => !stillNear.contains(id));
 
-      log.log('⏰ onRepeatEvent: checked ${crossings.length} crossings at '
-          '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}');
+      print('⏰ BG checked ${crossings.length} crossings, threshold=${threshold.round()}m, '
+          'pos=${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}');
     } catch (e) {
       log.log('❌ onRepeatEvent error: $e');
     }

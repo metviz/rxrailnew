@@ -206,17 +206,18 @@ double _haversineDistanceMeters(
           math.cos(lat2 * math.pi / 180) *
           math.sin(dLon / 2) *
           math.sin(dLon / 2);
-  return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  return r * 2 * math.atan2(math.sqrt(a), math.sqrt((1 - a).clamp(0.0, 1.0)));
 }
 
 /// Fire a high-priority crossing alert from within the background isolate.
 /// Uses a stable notification ID per crossing so repeated firings
 /// update the same notification rather than stacking.
-Future<void> _showCrossingAlert(String crossingId, String street, double distanceMeters) async {
-  final plugin = FlutterLocalNotificationsPlugin();
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-  await plugin.initialize(const InitializationSettings(android: androidInit));
-
+Future<void> _showCrossingAlert(
+  FlutterLocalNotificationsPlugin plugin,
+  String crossingId,
+  String street,
+  double distanceMeters,
+) async {
   final distanceText = distanceMeters < 1000
       ? '${distanceMeters.round()}m away'
       : '${(distanceMeters / 1000).toStringAsFixed(1)}km away';
@@ -256,6 +257,11 @@ class LocationTaskHandler extends TaskHandler {
   /// Crossings we've already alerted for. Cleared when user moves >2x warning distance away.
   final Set<String> _alertedCrossings = {};
 
+  final FlutterLocalNotificationsPlugin _notifPlugin = FlutterLocalNotificationsPlugin();
+  bool _notifInitialized = false;
+
+  Position? _lastPosition;
+
   @override
   Future<void> onStart(DateTime timestamp, TaskData? taskData) async {
     _sendPort = taskData?.sendPort;
@@ -267,11 +273,17 @@ class LocationTaskHandler extends TaskHandler {
       distanceFilter: _kDistanceFilterMeters, // Update every 10 meters
     );
 
+    // Initialize notification plugin once
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    await _notifPlugin.initialize(const InitializationSettings(android: androidInit));
+    _notifInitialized = true;
+
     _positionStream = Geolocator.getPositionStream(
       locationSettings: locationSettings,
     ).listen(
       (Position position) async {
         log.log('📍 Location update: ${position.latitude}, ${position.longitude}');
+        _lastPosition = position;
         
         // Save position to SharedPreferences
         await _savePositionToPrefs(position);
@@ -297,16 +309,10 @@ class LocationTaskHandler extends TaskHandler {
   @override
   Future<void> onRepeatEvent(DateTime timestamp, TaskData? taskData) async {
     try {
-      // 1. Get current position
-      Position position;
-      try {
-        position = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-          ),
-        );
-      } catch (e) {
-        log.log('⏰ onRepeatEvent: could not get position: $e');
+      // 1. Use position from the running stream
+      final position = _lastPosition;
+      if (position == null) {
+        log.log('⏰ onRepeatEvent: no position yet');
         return;
       }
 
@@ -327,6 +333,7 @@ class LocationTaskHandler extends TaskHandler {
 
       for (final crossing in crossings) {
         final id = crossing['crossingid'] as String? ?? '';
+        if (id.isEmpty) continue;
         final lat = double.tryParse(crossing['latitude'] as String? ?? '') ?? 0;
         final lng = double.tryParse(crossing['longitude'] as String? ?? '') ?? 0;
         final street = crossing['street'] as String? ?? 'Railway Crossing';
@@ -342,7 +349,9 @@ class LocationTaskHandler extends TaskHandler {
           if (!_alertedCrossings.contains(id)) {
             _alertedCrossings.add(id);
             log.log('🔔 Crossing alert: $street — ${distance.round()}m');
-            await _showCrossingAlert(id, street, distance);
+            if (_notifInitialized) {
+              await _showCrossingAlert(_notifPlugin, id, street, distance);
+            }
           }
         }
       }

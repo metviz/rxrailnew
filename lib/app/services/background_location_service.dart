@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:isolate';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
@@ -153,24 +152,6 @@ class BackgroundLocationService extends GetxService {
     }
   }
 
-  Future<void> _savePosition(Position position) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final positionJson = jsonEncode({
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'accuracy': position.accuracy,
-        'altitude': position.altitude,
-        'heading': position.heading,
-        'speed': position.speed,
-        'timestamp': position.timestamp.millisecondsSinceEpoch,
-      });
-      await prefs.setString(_lastPositionKey, positionJson);
-    } catch (e) {
-      log.log('Error saving position: $e');
-    }
-  }
-
   Future<Position?> getLastKnownPosition() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -206,6 +187,7 @@ class BackgroundLocationService extends GetxService {
 }
 
 // Top-level constants
+const String _kLastPositionKey = 'last_position';
 const int _kDistanceFilterMeters = 10;
 
 // Top-level callback function
@@ -291,7 +273,7 @@ class LocationTaskHandler extends TaskHandler {
         'accuracy': position.accuracy,
         'timestamp': position.timestamp.millisecondsSinceEpoch,
       });
-      await prefs.setString('last_position', positionJson);
+      await prefs.setString(_kLastPositionKey, positionJson);
     } catch (e) {
       log.log('Error saving position: $e');
     }

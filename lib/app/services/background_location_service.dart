@@ -163,13 +163,13 @@ class BackgroundLocationService extends GetxService {
       if (positionJson != null) {
         final data = jsonDecode(positionJson);
         return Position(
-          latitude: data['latitude'],
-          longitude: data['longitude'],
-          accuracy: data['accuracy'],
-          altitude: data['altitude'],
-          heading: data['heading'],
-          speed: data['speed'],
-          timestamp: DateTime.fromMillisecondsSinceEpoch(data['timestamp']),
+          latitude: (data['latitude'] as num).toDouble(),
+          longitude: (data['longitude'] as num).toDouble(),
+          accuracy: (data['accuracy'] as num).toDouble(),
+          altitude: (data['altitude'] as num? ?? 0).toDouble(),
+          heading: 0.0,
+          speed: 0.0,
+          timestamp: DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int),
           speedAccuracy: 0.0,
           altitudeAccuracy: 0.0,
           headingAccuracy: 0.0,
@@ -330,6 +330,7 @@ class LocationTaskHandler extends TaskHandler {
       // 4. Check each crossing
       final double threshold = settings.distanceMeters;
       final Set<String> nowNear = {};
+      final Set<String> stillNear = {}; // hysteresis zone: within 2x threshold
 
       for (final crossing in crossings) {
         final id = crossing['crossingid'] as String? ?? '';
@@ -344,6 +345,9 @@ class LocationTaskHandler extends TaskHandler {
           position.latitude, position.longitude, lat, lng,
         );
 
+        if (distance <= threshold * 2) {
+          stillNear.add(id); // within hysteresis zone — keep alert state
+        }
         if (distance <= threshold) {
           nowNear.add(id);
           if (!_alertedCrossings.contains(id)) {
@@ -356,8 +360,8 @@ class LocationTaskHandler extends TaskHandler {
         }
       }
 
-      // 5. Clear alerts for crossings the user has left (>2x threshold = re-alert on return)
-      _alertedCrossings.removeWhere((id) => !nowNear.contains(id));
+      // 5. Only evict from alerted set when user is >2x threshold away (hysteresis)
+      _alertedCrossings.removeWhere((id) => !stillNear.contains(id));
 
       log.log('⏰ onRepeatEvent: checked ${crossings.length} crossings at '
           '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}');

@@ -2792,14 +2792,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
         nearbyLocations.assignAll(uniqueLocations.values.toList());
         // Persist to SharedPreferences for background isolate
-        CrossingCacheService.saveCrossings(
+        unawaited(CrossingCacheService.saveCrossings(
           nearbyLocations.map((c) => {
             'crossingid': c.crossingid ?? '',
             'latitude': c.latitude ?? '0',
             'longitude': c.longitude ?? '0',
             'street': c.street ?? 'Railway Crossing',
           }).toList(),
-        );
+        ));
       } else {
         errorMessage.value = "Failed to fetch data.";
       }

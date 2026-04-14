@@ -128,3 +128,7 @@ The Congressional App Challenge for inspiration
 🌎 **Website**: https://rxrail.org
 
 🐙 **GitHub**: https://github.com/metviz/rxrailnew
+
+---
+
+> Parts of the codebase in this repository were developed with the assistance of [Claude Code](https://claude.ai/code) by Anthropic.

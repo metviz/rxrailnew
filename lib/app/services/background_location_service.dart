@@ -16,18 +16,24 @@ class BackgroundLocationService extends GetxService {
   
   // Callback for location updates
   Function(Position)? onLocationUpdate;
+  StreamSubscription<dynamic>? _receivePortSubscription;
 
   void _startReceivePort() {
-    FlutterForegroundTask.receivePort?.listen((data) {
+    final port = FlutterForegroundTask.receivePort;
+    if (port == null) {
+      log.log('⚠️ FlutterForegroundTask.receivePort is null — location updates will not be received');
+      return;
+    }
+    _receivePortSubscription = port.listen((data) {
       if (data is Map && data['type'] == 'location') {
         try {
           final position = Position(
             latitude: (data['latitude'] as num).toDouble(),
             longitude: (data['longitude'] as num).toDouble(),
             accuracy: (data['accuracy'] as num).toDouble(),
-            altitude: 0.0,
-            heading: 0.0,
-            speed: 0.0,
+            altitude: (data['altitude'] as num? ?? 0).toDouble(),
+            heading: (data['heading'] as num? ?? 0).toDouble(),
+            speed: (data['speed'] as num? ?? 0).toDouble(),
             timestamp: DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int),
             speedAccuracy: 0.0,
             altitudeAccuracy: 0.0,
@@ -191,7 +197,8 @@ class BackgroundLocationService extends GetxService {
 
   @override
   void onClose() {
-    stopBackgroundTracking();
+    _receivePortSubscription?.cancel();
+    unawaited(stopBackgroundTracking());
     super.onClose();
   }
 }
@@ -232,6 +239,9 @@ class LocationTaskHandler extends TaskHandler {
           'latitude': position.latitude,
           'longitude': position.longitude,
           'accuracy': position.accuracy,
+          'altitude': position.altitude,
+          'heading': position.heading,
+          'speed': position.speed,
           'timestamp': position.timestamp.millisecondsSinceEpoch,
         });
       },

@@ -1,4 +1,4 @@
-package com.example.cross_aware
+package com.rxrail.app
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -9,7 +9,7 @@ android {
         noCompress += "mp3"
     }
 
-    namespace = "com.example.cross_aware"
+    namespace = "com.rxrail.app"
     compileSdk = 36
     ndkVersion = "27.0.12077973"
 
@@ -24,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.cross_aware"
+        applicationId = "com.rxrail.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

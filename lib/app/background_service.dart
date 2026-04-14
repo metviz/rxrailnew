@@ -10,6 +10,8 @@ class BackgroundService {
   factory BackgroundService() => _instance;
   BackgroundService._internal();
 
+  static const int _serviceId = 256;
+
    initialize() {
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
@@ -41,6 +43,7 @@ class BackgroundService {
   Future<bool> startForegroundService() async {
     if (!await FlutterForegroundTask.isRunningService) {
       return await FlutterForegroundTask.startService(
+        serviceId: _serviceId,
         notificationTitle: 'Railway Crossing Alerts Active',
         notificationText: 'Monitoring for nearby railway crossings',
         callback: startBackgroundTask,

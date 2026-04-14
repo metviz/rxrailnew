@@ -11,6 +11,7 @@ class BackgroundLocationService extends GetxService {
   static const String _lastPositionKey = 'last_position';
   static const String _isServiceRunningKey = 'is_service_running';
   static const int _repeatIntervalMs = 5000;
+  static const int _serviceId = 257;
 
   final isRunning = false.obs;
   final Rxn<Position> currentPosition = Rxn<Position>();
@@ -113,7 +114,7 @@ class BackgroundLocationService extends GetxService {
 
       // Start foreground service
       final started = await FlutterForegroundTask.startService(
-        serviceId: 256,
+        serviceId: _serviceId,
         notificationTitle: 'RXrail Active',
         notificationText: 'Monitoring for railway crossings',
         callback: startLocationTracking,

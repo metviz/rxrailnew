@@ -2763,10 +2763,6 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
             continue;
           }
 
-          final switchingTrains =
-              int.tryParse(e['totalswitchingtrains']?.toString() ?? '0') ?? 0;
-          if (switchingTrains == 0) continue;
-
           final lat = e['latitude'];
           final lng = e['longitude'];
           final street = (e['street'] ?? '').toString().trim().toLowerCase();

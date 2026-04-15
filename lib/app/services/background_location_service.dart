@@ -204,7 +204,8 @@ double _haversineDistanceMeters(
 /// Fire a high-priority crossing alert from within the background isolate.
 /// Uses a stable notification ID per crossing so repeated firings
 /// update the same notification rather than stacking.
-Future<void> _showCrossingAlert(
+/// Shows a crossing alert and returns the notification ID used.
+Future<int> _showCrossingAlert(
   FlutterLocalNotificationsPlugin plugin,
   String crossingId,
   String street,
@@ -223,7 +224,7 @@ Future<void> _showCrossingAlert(
     enableLights: true,
     enableVibration: true,
     playSound: true,
-    autoCancel: false,
+    autoCancel: true,
     icon: '@mipmap/ic_launcher',
   );
 
@@ -234,6 +235,7 @@ Future<void> _showCrossingAlert(
     '$street — $distanceText',
     const NotificationDetails(android: androidDetails),
   );
+  return notifId;
 }
 
 // Top-level callback function
@@ -245,8 +247,13 @@ void startLocationTracking() {
 class LocationTaskHandler extends TaskHandler {
   StreamSubscription<Position>? _positionStream;
 
-  /// Crossings we've already alerted for. Cleared when user moves >2x warning distance away.
-  final Set<String> _alertedCrossings = {};
+  /// How many times we've alerted for each crossing this visit. Reset when user leaves.
+  final Map<String, int> _alertCount = {};
+
+  /// Notification IDs currently shown, keyed by crossing ID. Used to cancel on exit.
+  final Map<String, int> _activeNotifIds = {};
+
+  static const int _maxAlertsPerVisit = 2;
 
   final FlutterLocalNotificationsPlugin _notifPlugin = FlutterLocalNotificationsPlugin();
   bool _notifInitialized = false;
@@ -364,18 +371,28 @@ class LocationTaskHandler extends TaskHandler {
           stillNear.add(id); // within hysteresis zone — keep alert state
         }
         if (distance <= threshold) {
-          if (!_alertedCrossings.contains(id)) {
-            _alertedCrossings.add(id);
-            print('🔔 BG Crossing alert: $street — ${distance.round()}m');
+          final count = _alertCount[id] ?? 0;
+          if (count < _maxAlertsPerVisit) {
+            _alertCount[id] = count + 1;
+            print('🔔 BG Crossing alert #${count + 1}: $street — ${distance.round()}m');
             if (_notifInitialized) {
-              await _showCrossingAlert(_notifPlugin, id, street, distance);
+              final notifId = await _showCrossingAlert(_notifPlugin, id, street, distance);
+              _activeNotifIds[id] = notifId;
             }
           }
         }
       }
 
-      // 5. Only evict from alerted set when user is >2x threshold away (hysteresis)
-      _alertedCrossings.removeWhere((id) => !stillNear.contains(id));
+      // 5. When user leaves hysteresis zone: cancel notification + reset alert count
+      final departed = _alertCount.keys.where((id) => !stillNear.contains(id)).toList();
+      for (final id in departed) {
+        final notifId = _activeNotifIds.remove(id);
+        if (notifId != null) {
+          await _notifPlugin.cancel(notifId);
+          print('🔕 Cancelled notification for crossing $id');
+        }
+        _alertCount.remove(id);
+      }
 
       print('⏰ BG checked ${crossings.length} crossings, threshold=${threshold.round()}m, '
           'pos=${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}');

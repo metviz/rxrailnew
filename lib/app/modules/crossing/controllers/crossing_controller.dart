@@ -744,6 +744,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           _cleanupDownload(stateCode, isError: true, error: e.toString());
         },
         onDone: () {
+          if (_downloadCancelledIntentionally) return;
           log_print.log("✅ Download complete for $stateCode");
           _cleanupDownload(stateCode, isComplete: true);
         },
@@ -852,6 +853,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     isDownloadingOfflineMap.value = false;
     _currentDownloadingState = null;
+    _downloadCancelledIntentionally = false;
 
     // Disable wake lock
     await WakelockPlus.disable();
@@ -1005,6 +1007,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (!isDownloadingOfflineMap.value) return;
 
     try {
+      _downloadCancelledIntentionally = true;
       await _downloadSubscription?.cancel();
       _downloadSubscription = null;
 
@@ -1247,6 +1250,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   final RxInt partialTotalTiles = 0.obs;
   final Rxn<DateTime> offlineMapLastUpdated = Rxn<DateTime>();
   StreamSubscription<DownloadProgress>? _downloadSubscription;
+  bool _downloadCancelledIntentionally = false;
   final RxBool isDownloadingOfflineMap = false.obs;
   final RxDouble offlineMapDownloadProgress = 0.0.obs;
   final RxInt downloadedTiles = 0.obs;

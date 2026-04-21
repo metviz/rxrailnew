@@ -234,7 +234,7 @@ Future<int> _showCrossingAlert(
     notifId,
     '⚠️ Railway Crossing Ahead',
     '$street — $distanceText',
-    const NotificationDetails(android: androidDetails),
+    NotificationDetails(android: androidDetails),
   );
   return notifId;
 }

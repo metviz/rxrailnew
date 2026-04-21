@@ -7,6 +7,7 @@ class NewsBinding extends Bindings {
   void dependencies() {
     Get.lazyPut<NewsController>(
       () => NewsController(),
+      fenix: true,
     );
   }
 }

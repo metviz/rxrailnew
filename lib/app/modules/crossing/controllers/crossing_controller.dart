@@ -79,6 +79,8 @@ Future<bool> _handleLocationUpdate(Map<String, dynamic>? inputData) async {
 Future<bool> _patchOfflineTiles() async {
   try {
     log_print.log('🗺️ Weekly tile patch started');
+    // Workmanager runs in a separate isolate — FMTC must be re-initialized here.
+    await FMTCObjectBoxBackend().initialise();
     final prefs = await SharedPreferences.getInstance();
     final stateCode = prefs.getString('current_state_code') ?? 'NC';
     final store = FMTCStore('offline_tiles_$stateCode');
@@ -169,8 +171,15 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     try {
       final cached = await CrossingCacheService.loadCrossings();
       if (cached.isNotEmpty) return; // already populated
-      final pos = await Geolocator.getLastKnownPosition();
-      if (pos == null) return;
+      Position? pos = await Geolocator.getLastKnownPosition();
+      // On fresh install or post-reboot, last known position is null — fall
+      // back to a live fix so the background isolate has data on cold start.
+      pos ??= await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
       await fetchLocations(center: LatLng(pos.latitude, pos.longitude));
     } catch (_) {}
   }
@@ -560,7 +569,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //   );
   // }
   // ✅ COMPLETELY REWRITTEN download method
-  Future<void> downloadOfflineMapForState(String stateCode) async {
+  Future<void> downloadOfflineMapForState(String stateCode, {bool resume = false}) async {
     if (isDownloadingOfflineMap.value) {
       Get.snackbar(
         "Download in Progress",
@@ -634,9 +643,9 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     final store = FMTCStore('offline_tiles_$stateCode');
 
     try {
-      // Check if already downloaded
+      // Check if already downloaded (skip dialog when resuming a partial download)
       final exists = await store.manage.ready;
-      if (exists) {
+      if (exists && !resume) {
         final stats = await store.stats.all;
         if (stats.length > 0) {
           final shouldRedownload = await Get.dialog<bool>(
@@ -663,6 +672,11 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
           if (shouldRedownload != true) return;
 
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('offline_map_partial_state');
+          await prefs.remove('offline_map_partial_downloaded');
+          await prefs.remove('offline_map_partial_total');
+          hasPartialDownload.value = false;
           await store.manage.delete();
         }
       }
@@ -680,12 +694,21 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       await _startDownloadForegroundService(stateCode);
       log_print.log("✅ Foreground service started");
 
-      // Set download state
+      // Set download state — seed counters from saved progress when resuming
       isDownloadingOfflineMap.value = true;
       _currentDownloadingState = stateCode;
-      offlineMapDownloadProgress.value = 0.0;
-      downloadedTiles.value = 0;
-      totalTiles.value = 0;
+      if (resume) {
+        offlineMapDownloadProgress.value =
+            partialTotalTiles.value > 0
+                ? (partialDownloadedTiles.value / partialTotalTiles.value) * 100
+                : 0.0;
+        downloadedTiles.value = partialDownloadedTiles.value;
+        totalTiles.value = partialTotalTiles.value;
+      } else {
+        offlineMapDownloadProgress.value = 0.0;
+        downloadedTiles.value = 0;
+        totalTiles.value = 0;
+      }
       _lastStreamUpdate = DateTime.now();
 
       final region = RectangleRegion(bounds);
@@ -730,6 +753,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           _cleanupDownload(stateCode, isError: true, error: e.toString());
         },
         onDone: () {
+          if (_downloadCancelledIntentionally) return;
           log_print.log("✅ Download complete for $stateCode");
           _cleanupDownload(stateCode, isComplete: true);
         },
@@ -838,6 +862,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     isDownloadingOfflineMap.value = false;
     _currentDownloadingState = null;
+    _downloadCancelledIntentionally = false;
 
     // Disable wake lock
     await WakelockPlus.disable();
@@ -850,10 +875,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (isComplete) {
       offlineMapDownloadProgress.value = 100.0;
 
-      // Persist download timestamp
+      // Persist download timestamp and clear any partial-download marker.
       final now = DateTime.now();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('offline_map_last_updated', now.toIso8601String());
+      await prefs.remove('offline_map_partial_state');
+      await prefs.remove('offline_map_partial_downloaded');
+      await prefs.remove('offline_map_partial_total');
+      hasPartialDownload.value = false;
       offlineMapLastUpdated.value = now;
 
       const AndroidNotificationDetails androidDetails =
@@ -987,12 +1016,26 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (!isDownloadingOfflineMap.value) return;
 
     try {
+      _downloadCancelledIntentionally = true;
       await _downloadSubscription?.cancel();
       _downloadSubscription = null;
 
       if (_currentDownloadingState != null) {
-        final store = FMTCStore('offline_tiles_$_currentDownloadingState');
-        await store.download.cancel();
+        // Persist partial state FIRST — before any FMTC calls that may throw.
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('offline_map_partial_state', _currentDownloadingState!);
+        await prefs.setInt('offline_map_partial_downloaded', downloadedTiles.value);
+        await prefs.setInt('offline_map_partial_total', totalTiles.value);
+        hasPartialDownload.value = true;
+        partialDownloadedTiles.value = downloadedTiles.value;
+        partialTotalTiles.value = totalTiles.value;
+
+        try {
+          final store = FMTCStore('offline_tiles_$_currentDownloadingState');
+          await store.download.cancel();
+        } catch (e) {
+          log_print.log("FMTC cancel error (non-fatal): $e");
+        }
 
         await _cleanupDownload(_currentDownloadingState!, isCancelled: true);
       }
@@ -1211,8 +1254,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
   // Add observable variable
   final hasOfflineMap = false.obs;
+  final hasPartialDownload = false.obs;
+  final RxInt partialDownloadedTiles = 0.obs;
+  final RxInt partialTotalTiles = 0.obs;
   final Rxn<DateTime> offlineMapLastUpdated = Rxn<DateTime>();
   StreamSubscription<DownloadProgress>? _downloadSubscription;
+  bool _downloadCancelledIntentionally = false;
   final RxBool isDownloadingOfflineMap = false.obs;
   final RxDouble offlineMapDownloadProgress = 0.0.obs;
   final RxInt downloadedTiles = 0.obs;
@@ -1292,7 +1339,26 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (raw != null) {
       offlineMapLastUpdated.value = DateTime.tryParse(raw);
     }
+    // Detect partial (cancelled) download — store exists but never completed.
+    final partialState = prefs.getString('offline_map_partial_state');
+    if (partialState != null) {
+      final d = prefs.getInt('offline_map_partial_downloaded') ?? 0;
+      final t = prefs.getInt('offline_map_partial_total') ?? 0;
+      hasPartialDownload.value = t > 0 && d < t;
+      partialDownloadedTiles.value = d;
+      partialTotalTiles.value = t;
+    } else {
+      hasPartialDownload.value = false;
+    }
   }
+
+  Future<void> resumeOfflineMapDownload() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stateCode = prefs.getString('offline_map_partial_state') ?? _getCurrentStateCode();
+    await downloadOfflineMapForState(stateCode, resume: true);
+  }
+
+  String _getCurrentStateCode() => 'NC';
 
   void initializeOnPageOpen() async {
     log_print.log("🔄 Initializing location on page open");
@@ -7871,8 +7937,10 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
               mapController.rotate(-bearing);
             }
             log_print.log('🧭 Bearing updated: ${bearing.toStringAsFixed(1)}°');
-          } else if (speed < 0.5 && !isHeadingUp.value == false) {
-            // Reset to north when stopped
+          } else if (speed < 1.0 && isHeadingUp.value) {
+            // Reset to north when slowing or stopped in heading-up mode.
+            // Threshold matches the activate threshold (1.0) to avoid a
+            // dead-band where the map rotation freezes on deceleration.
             mapController.rotate(0);
             mapRotation.value = 0;
           }

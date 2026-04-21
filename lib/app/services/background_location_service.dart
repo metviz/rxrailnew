@@ -212,15 +212,19 @@ Future<int> _showCrossingAlert(
       ? '${distanceMeters.round()}m away'
       : '${(distanceMeters / 1000).toStringAsFixed(1)}km away';
 
-  const androidDetails = AndroidNotificationDetails(
-    'railwaycrossingalerts',
+  final prefs = await SharedPreferences.getInstance();
+  final soundEnabled = prefs.getBool('isWarningSoundEnabled') ?? true;
+  final vibrationEnabled = prefs.getBool('isVibrationEnabled') ?? true;
+
+  final androidDetails = AndroidNotificationDetails(
+    'railway_crossing_alerts',
     'Railway Crossing Alerts',
     channelDescription: 'High priority alerts for nearby railway crossings',
     importance: Importance.high,
     priority: Priority.high,
     enableLights: true,
-    enableVibration: true,
-    playSound: true,
+    enableVibration: vibrationEnabled,
+    playSound: soundEnabled,
     autoCancel: true,
     icon: '@mipmap/ic_launcher',
   );
@@ -230,7 +234,7 @@ Future<int> _showCrossingAlert(
     notifId,
     '⚠️ Railway Crossing Ahead',
     '$street — $distanceText',
-    const NotificationDetails(android: androidDetails),
+    NotificationDetails(android: androidDetails),
   );
   return notifId;
 }
@@ -254,11 +258,17 @@ class LocationTaskHandler extends TaskHandler {
 
   Position? _lastPosition;
   DateTime? _lastFraFetch;
+  bool _checkInProgress = false;
+  static const String _kLastFraFetchKey = 'bg_last_fra_fetch';
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await TestLogger.init(tag: 'BG');
     await TestLogger.log('🚀 Location tracking started', tag: 'BG');
+    // Restore persisted throttle timestamp so restarts don't bypass the 30-min limit
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kLastFraFetchKey);
+    if (raw != null) _lastFraFetch = DateTime.tryParse(raw);
 
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.best,
@@ -289,7 +299,11 @@ class LocationTaskHandler extends TaskHandler {
         // Check proximity on every GPS fix, not just on the repeat timer.
         // At driving speed (~60 km/h = 17 m/s) the 5 s timer fires every
         // ~85 m — a crossing zone could be entered and exited between ticks.
-        await _checkProximity(source: 'GPS');
+        // Guard against concurrent executions (GPS fixes can arrive faster
+        // than _checkProximity completes at highway speed).
+        if (_checkInProgress) return;
+        _checkInProgress = true;
+        _checkProximity(source: 'GPS').whenComplete(() => _checkInProgress = false);
       },
       onError: (error) {
         TestLogger.log('❌ Location stream error: $error', tag: 'BG');
@@ -299,7 +313,9 @@ class LocationTaskHandler extends TaskHandler {
 
   @override
   void onRepeatEvent(DateTime timestamp) {
-    _checkProximity(source: 'TIMER');
+    if (_checkInProgress) return;
+    _checkInProgress = true;
+    _checkProximity(source: 'TIMER').whenComplete(() => _checkInProgress = false);
   }
 
   Future<void> _checkProximity({String source = 'TIMER'}) async {
@@ -433,8 +449,11 @@ class LocationTaskHandler extends TaskHandler {
         now.difference(_lastFraFetch!).inMinutes < 30) {
       return [];
     }
-    // Set before attempt so failures don't cause hammering every 5 seconds
+    // Set before attempt so failures don't cause hammering every 5 seconds.
+    // Persisted to SharedPreferences so the throttle survives service restarts.
     _lastFraFetch = now;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kLastFraFetchKey, now.toIso8601String());
     try {
       const double delta = 0.225; // ~25 km
       final latMin = position.latitude - delta;

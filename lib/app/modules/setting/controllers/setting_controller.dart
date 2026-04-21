@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../services/test_logger.dart';
 import '../../crossing/controllers/crossing_controller.dart';
 
 class SettingController extends GetxController {
@@ -33,7 +35,7 @@ class SettingController extends GetxController {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     isWarningsEnabled.value = prefs.getBool('isWarningsEnabled') ?? true;
-    warningDistance.value = prefs.getDouble('warningDistance') ?? 200.0;
+    warningDistance.value = (prefs.getDouble('warningDistance') ?? 200.0).clamp(100.0, 500.0);
     isWarningSoundEnabled.value = prefs.getBool('isWarningSoundEnabled') ?? true;
     isVibrationEnabled.value = prefs.getBool('isVibrationEnabled') ?? true;
     distanceUnit.value = prefs.getString('distanceUnit') ?? 'miles';
@@ -145,5 +147,39 @@ class SettingController extends GetxController {
   void updateDistanceUnit(String value) {
     distanceUnit.value = value;
     _savePreferences();
+  }
+
+  // ── Test Logs ──────────────────────────────────────────────────────────────
+  final RxString logFileSize = '…'.obs;
+  final RxString logFilePath = ''.obs;
+
+  Future<void> refreshLogInfo() async {
+    logFilePath.value = TestLogger.filePath ?? 'No log file yet';
+    logFileSize.value = await TestLogger.fileSize();
+  }
+
+  void copyAdbCommand() {
+    final path = TestLogger.filePath;
+    if (path == null) return;
+    // Strip the filename — pull the whole directory so all log files come over
+    final dir = path.substring(0, path.lastIndexOf('/'));
+    final cmd = 'adb pull $dir/ .';
+    Clipboard.setData(ClipboardData(text: cmd));
+    Get.snackbar(
+      'Copied',
+      'ADB command copied to clipboard',
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  Future<void> clearLogs() async {
+    await TestLogger.clearAll();
+    await refreshLogInfo();
+    Get.snackbar(
+      'Logs cleared',
+      'All test log files deleted',
+      snackPosition: SnackPosition.BOTTOM,
+    );
   }
 }

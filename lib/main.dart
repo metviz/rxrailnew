@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:get/get.dart';
@@ -11,6 +12,11 @@ import 'app/utils/app_strings.dart';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
+  // .env is not bundled as an asset (secrets must not ship in the APK).
+  // Load gracefully so missing file doesn't crash a clean build.
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {}
   // HttpOverrides.global = MyHttpOverrides();
   await PreferencesManager.getInstance();
   await NotificationService().init();

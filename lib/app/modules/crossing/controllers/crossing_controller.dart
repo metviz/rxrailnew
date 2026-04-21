@@ -721,6 +721,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         ),
       );
 
+      // Clear any lingering FMTC download instance before starting a new one.
+      // Prevents "A download instance with ID 0 already exists" errors.
+      try {
+        await store.download.cancel();
+      } catch (_) {}
+
       final progressStream = store.download.startForeground(
         region: downloadable,
         parallelThreads: 5,
@@ -862,7 +868,6 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     isDownloadingOfflineMap.value = false;
     _currentDownloadingState = null;
-    _downloadCancelledIntentionally = false;
 
     // Disable wake lock
     await WakelockPlus.disable();
@@ -1011,43 +1016,62 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  // ✅ Updated cancel method
   Future<void> cancelOfflineMapDownload() async {
     if (!isDownloadingOfflineMap.value) return;
 
+    _cancelCompleter = Completer<void>();
+    _downloadCancelledIntentionally = true;
+    isDownloadingOfflineMap.value = false;
+
+    // Capture everything synchronously before the first await.  A concurrent
+    // Resume tap can start a new download in the gap between awaits, so we
+    // must not touch live shared state after this point.
+    final capturedState = _currentDownloadingState;
+    final capturedDownloaded = downloadedTiles.value;
+    final capturedTotal = totalTiles.value;
+    _currentDownloadingState = null;
+
     try {
-      _downloadCancelledIntentionally = true;
       await _downloadSubscription?.cancel();
       _downloadSubscription = null;
 
-      if (_currentDownloadingState != null) {
-        // Persist partial state FIRST — before any FMTC calls that may throw.
+      if (capturedState != null) {
+        // Always persist to SharedPreferences so the partial state survives.
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('offline_map_partial_state', _currentDownloadingState!);
-        await prefs.setInt('offline_map_partial_downloaded', downloadedTiles.value);
-        await prefs.setInt('offline_map_partial_total', totalTiles.value);
-        hasPartialDownload.value = true;
-        partialDownloadedTiles.value = downloadedTiles.value;
-        partialTotalTiles.value = totalTiles.value;
+        await prefs.setString('offline_map_partial_state', capturedState);
+        await prefs.setInt('offline_map_partial_downloaded', capturedDownloaded);
+        await prefs.setInt('offline_map_partial_total', capturedTotal);
 
-        try {
-          final store = FMTCStore('offline_tiles_$_currentDownloadingState');
-          await store.download.cancel();
-        } catch (e) {
-          log_print.log("FMTC cancel error (non-fatal): $e");
+        // Guard all remaining work: if the user already tapped Resume and a
+        // new download is running, skip FMTC cancel and cleanup entirely to
+        // avoid killing the freshly started resume.
+        if (!isDownloadingOfflineMap.value) {
+          hasPartialDownload.value = true;
+          partialDownloadedTiles.value = capturedDownloaded;
+          partialTotalTiles.value = capturedTotal;
+
+          try {
+            await FMTCStore('offline_tiles_$capturedState').download.cancel();
+          } catch (e) {
+            log_print.log("FMTC cancel error (non-fatal): $e");
+          }
+
+          await _cleanupDownload(capturedState, isCancelled: true);
+
+          Get.snackbar(
+            "Download Cancelled",
+            "Offline map download has been cancelled",
+            backgroundColor: Colors.orange,
+            colorText: Colors.white,
+          );
         }
-
-        await _cleanupDownload(_currentDownloadingState!, isCancelled: true);
       }
-
-      Get.snackbar(
-        "Download Cancelled",
-        "Offline map download has been cancelled",
-        backgroundColor: Colors.orange,
-        colorText: Colors.white,
-      );
     } catch (e) {
       log_print.log("Error cancelling download: $e");
+    } finally {
+      _cancelCompleter?.complete();
+      _cancelCompleter = null;
+      _downloadCancelledIntentionally = false;
     }
   }
 
@@ -1260,6 +1284,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   final Rxn<DateTime> offlineMapLastUpdated = Rxn<DateTime>();
   StreamSubscription<DownloadProgress>? _downloadSubscription;
   bool _downloadCancelledIntentionally = false;
+  Completer<void>? _cancelCompleter;
   final RxBool isDownloadingOfflineMap = false.obs;
   final RxDouble offlineMapDownloadProgress = 0.0.obs;
   final RxInt downloadedTiles = 0.obs;
@@ -1353,6 +1378,9 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> resumeOfflineMapDownload() async {
+    // Wait for any in-progress cancel to fully finish (FMTC cancel + cleanup)
+    // before starting a new download, otherwise cleanup kills the new download.
+    if (_cancelCompleter != null) await _cancelCompleter!.future;
     final prefs = await SharedPreferences.getInstance();
     final stateCode = prefs.getString('offline_map_partial_state') ?? _getCurrentStateCode();
     await downloadOfflineMapForState(stateCode, resume: true);

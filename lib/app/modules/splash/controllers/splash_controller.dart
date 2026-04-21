@@ -5,6 +5,7 @@ import '../../../shared_preferences/preference_key.dart';
 import '../../../shared_preferences/preference_manager.dart';
 import '../../crossing/controllers/crossing_controller.dart';
 import '../../../services/background_location_service.dart';
+import '../../../utils/permission_helper.dart';
 import 'package:flutter/material.dart';
 
 class SplashController extends GetxController {
@@ -33,6 +34,7 @@ class SplashController extends GetxController {
       // Run location setup in background
       Future.delayed(const Duration(seconds: 1), () async {
         try {
+          await PermissionHelper.requestAllPermissions();
           await crossingController.initializeLocationServices();
           await crossingController.fetchInitialLocation();
           // Start background proximity alerting after permissions are granted

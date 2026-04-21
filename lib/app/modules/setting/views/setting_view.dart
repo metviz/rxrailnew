@@ -212,9 +212,12 @@ class SettingView extends GetView<SettingController> {
     return Obx(() {
       final isDownloading = cc.isDownloadingOfflineMap.value;
       final hasMap = cc.hasOfflineMap.value;
+      final hasPartial = cc.hasPartialDownload.value;
       final progress = cc.offlineMapDownloadProgress.value;
       final downloaded = cc.downloadedTiles.value;
       final total = cc.totalTiles.value;
+      final partialDownloaded = cc.partialDownloadedTiles.value;
+      final partialTotal = cc.partialTotalTiles.value;
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,7 +237,28 @@ class SettingView extends GetView<SettingController> {
                         color: Colors.black,
                       ),
                     ),
-                    if (hasMap && !isDownloading)
+                    if (hasPartial && !isDownloading && !hasMap)
+                      Padding(
+                        padding: EdgeInsets.only(top: 2.h),
+                        child: Row(
+                          children: [
+                            Icon(Icons.pause_circle_outline,
+                                color: Colors.blue, size: 13.sp),
+                            SizedBox(width: 4.w),
+                            Text(
+                              partialTotal > 0
+                                  ? "Paused — $partialDownloaded / $partialTotal tiles"
+                                  : "Download paused",
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                color: Colors.blue[700],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (hasMap && !isDownloading)
                       Padding(
                         padding: EdgeInsets.only(top: 2.h),
                         child: Column(
@@ -294,6 +318,51 @@ class SettingView extends GetView<SettingController> {
                       ),
                     ),
                   ),
+                )
+              else if (hasPartial)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      borderRadius: BorderRadius.circular(20.r),
+                      onTap: () async {
+                        await cc.resumeOfflineMapDownload();
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 16.w, vertical: 8.h),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(20.r),
+                          border: Border.all(color: Colors.blue.shade300),
+                        ),
+                        child: Text(
+                          "Resume",
+                          style: TextStyle(
+                            fontSize: 14.sp,
+                            color: Colors.blue[700],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(20.r),
+                      onTap: () async {
+                        await cc.downloadOfflineMapByCurrentState();
+                        await cc.checkOfflineMapAvailability();
+                      },
+                      child: Text(
+                        "Restart",
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: Colors.grey[500],
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
                 )
               else
                 InkWell(

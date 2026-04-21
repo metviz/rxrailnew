@@ -672,6 +672,11 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
           if (shouldRedownload != true) return;
 
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('offline_map_partial_state');
+          await prefs.remove('offline_map_partial_downloaded');
+          await prefs.remove('offline_map_partial_total');
+          hasPartialDownload.value = false;
           await store.manage.delete();
         }
       }
@@ -859,10 +864,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (isComplete) {
       offlineMapDownloadProgress.value = 100.0;
 
-      // Persist download timestamp
+      // Persist download timestamp and clear any partial-download marker.
       final now = DateTime.now();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('offline_map_last_updated', now.toIso8601String());
+      await prefs.remove('offline_map_partial_state');
+      await prefs.remove('offline_map_partial_downloaded');
+      await prefs.remove('offline_map_partial_total');
+      hasPartialDownload.value = false;
       offlineMapLastUpdated.value = now;
 
       const AndroidNotificationDetails androidDetails =
@@ -1002,6 +1011,15 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       if (_currentDownloadingState != null) {
         final store = FMTCStore('offline_tiles_$_currentDownloadingState');
         await store.download.cancel();
+
+        // Persist partial progress so the UI can offer a Resume button.
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('offline_map_partial_state', _currentDownloadingState!);
+        await prefs.setInt('offline_map_partial_downloaded', downloadedTiles.value);
+        await prefs.setInt('offline_map_partial_total', totalTiles.value);
+        hasPartialDownload.value = true;
+        partialDownloadedTiles.value = downloadedTiles.value;
+        partialTotalTiles.value = totalTiles.value;
 
         await _cleanupDownload(_currentDownloadingState!, isCancelled: true);
       }
@@ -1220,6 +1238,9 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
   // Add observable variable
   final hasOfflineMap = false.obs;
+  final hasPartialDownload = false.obs;
+  final RxInt partialDownloadedTiles = 0.obs;
+  final RxInt partialTotalTiles = 0.obs;
   final Rxn<DateTime> offlineMapLastUpdated = Rxn<DateTime>();
   StreamSubscription<DownloadProgress>? _downloadSubscription;
   final RxBool isDownloadingOfflineMap = false.obs;
@@ -1301,7 +1322,26 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (raw != null) {
       offlineMapLastUpdated.value = DateTime.tryParse(raw);
     }
+    // Detect partial (cancelled) download — store exists but never completed.
+    final partialState = prefs.getString('offline_map_partial_state');
+    if (partialState != null) {
+      final d = prefs.getInt('offline_map_partial_downloaded') ?? 0;
+      final t = prefs.getInt('offline_map_partial_total') ?? 0;
+      hasPartialDownload.value = t > 0 && d < t;
+      partialDownloadedTiles.value = d;
+      partialTotalTiles.value = t;
+    } else {
+      hasPartialDownload.value = false;
+    }
   }
+
+  Future<void> resumeOfflineMapDownload() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stateCode = prefs.getString('offline_map_partial_state') ?? _getCurrentStateCode();
+    await downloadOfflineMapForState(stateCode);
+  }
+
+  String _getCurrentStateCode() => 'NC';
 
   void initializeOnPageOpen() async {
     log_print.log("🔄 Initializing location on page open");

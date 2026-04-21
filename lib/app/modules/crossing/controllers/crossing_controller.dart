@@ -694,12 +694,21 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       await _startDownloadForegroundService(stateCode);
       log_print.log("✅ Foreground service started");
 
-      // Set download state
+      // Set download state — seed counters from saved progress when resuming
       isDownloadingOfflineMap.value = true;
       _currentDownloadingState = stateCode;
-      offlineMapDownloadProgress.value = 0.0;
-      downloadedTiles.value = 0;
-      totalTiles.value = 0;
+      if (resume) {
+        offlineMapDownloadProgress.value =
+            partialTotalTiles.value > 0
+                ? (partialDownloadedTiles.value / partialTotalTiles.value) * 100
+                : 0.0;
+        downloadedTiles.value = partialDownloadedTiles.value;
+        totalTiles.value = partialTotalTiles.value;
+      } else {
+        offlineMapDownloadProgress.value = 0.0;
+        downloadedTiles.value = 0;
+        totalTiles.value = 0;
+      }
       _lastStreamUpdate = DateTime.now();
 
       final region = RectangleRegion(bounds);

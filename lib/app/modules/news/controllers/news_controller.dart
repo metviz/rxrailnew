@@ -36,23 +36,69 @@ class NewsController extends GetxController {
   var loading = true.obs;
 
   late String state;
+  late String stateAbbr;
+
   @override
   void onInit() {
     super.onInit();
-    // ✅ Get state argument
-    state = Get.arguments?['state'] ?? 'CA'; // default fallback
+    final raw = Get.arguments?['state'] ?? 'North Carolina';
+    state = raw;
+    stateAbbr = _toStateAbbr(raw);
     fetchCrashes();
   }
 
   Future<void> fetchCrashes() async {
     loading.value = true;
-    final data = await RailCrashService.fetchCombined(state);
-    // Fetch combined crashes and feed title
-    final result = await RailCrashService.fetchCombinedWithTitle(state);
-    crashes.assignAll(data);
-    feedTitle.value = result['feedTitle']; // <-- set it here
-    print("result['feedTitle']-----------${result['feedTitle']}");
+    final result = await RailCrashService.fetchCombinedWithTitle(state, stateAbbr);
+    final all = result['crashes'] as List<RailCrash>;
+    feedTitle.value = result['feedTitle'] as String;
+
+    final now = DateTime.now();
+
+    List<RailCrash> filtered = all
+        .where((c) => now.difference(c.date).inDays <= 14)
+        .toList();
+
+    // Extend to 30 days if nothing in the past 2 weeks
+    if (filtered.isEmpty) {
+      filtered = all
+          .where((c) => now.difference(c.date).inDays <= 30)
+          .toList();
+    }
+
+    // If still nothing, show all available results
+    if (filtered.isEmpty) {
+      filtered = List.of(all);
+    }
+
+    // Sort latest first
+    filtered.sort((a, b) => b.date.compareTo(a.date));
+
+    crashes.assignAll(filtered);
     loading.value = false;
+  }
+
+  /// Convert full state name OR 2-letter abbreviation to 2-letter abbreviation.
+  static String _toStateAbbr(String input) {
+    const map = {
+      'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR',
+      'California': 'CA', 'Colorado': 'CO', 'Connecticut': 'CT',
+      'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA', 'Hawaii': 'HI',
+      'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
+      'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME',
+      'Maryland': 'MD', 'Massachusetts': 'MA', 'Michigan': 'MI',
+      'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
+      'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV',
+      'New Hampshire': 'NH', 'New Jersey': 'NJ', 'New Mexico': 'NM',
+      'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND',
+      'Ohio': 'OH', 'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA',
+      'Rhode Island': 'RI', 'South Carolina': 'SC', 'South Dakota': 'SD',
+      'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
+      'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV',
+      'Wisconsin': 'WI', 'Wyoming': 'WY',
+    };
+    if (input.length == 2) return input.toUpperCase();
+    return map[input] ?? input.toUpperCase().substring(0, 2);
   }
 
   void openLink(String url) {
@@ -62,11 +108,10 @@ class NewsController extends GetxController {
   var feedTitle = ''.obs; // <-- Add this line
 }
 class RailCrashService {
-  /// FRA open dataset: https://data.transportation.gov/resource/8vuj-3vzp.json
-  /// (Railroad Equipment Accident/Incident Source Data)
-  static Future<List<RailCrash>> fetchFRA(String state) async {
+  /// FRA open dataset — uses 2-letter state abbreviation
+  static Future<List<RailCrash>> fetchFRA(String stateAbbr) async {
     final uri = Uri.parse(
-      'https://data.transportation.gov/resource/8vuj-3vzp.json?\$limit=10&state_ab=${Uri.encodeComponent(state)}',
+      'https://data.transportation.gov/resource/8vuj-3vzp.json?\$limit=10&state_ab=${Uri.encodeComponent(stateAbbr)}',
     );
 
     final response = await http.get(uri);
@@ -81,88 +126,36 @@ class RailCrashService {
         link: 'https://data.transportation.gov/resource/8vuj-3vzp.json',
         source: 'FRA',
         date: DateTime.tryParse(item['accidentdate'] ?? '') ?? DateTime.now(),
-        state: item['state_ab'] ?? state,
+        state: item['state_ab'] ?? stateAbbr,
         type: 'Official',
       ));
     }
     return crashes;
   }
 
-  static Future<List<RailCrash>> fetchGoogleNews(String state) async {
-    final query =
-        'train+derailment+OR+train+crash+OR+railroad+accident+$state+when:24h';
-        // 'train+derailment+$state';
-    final uri = Uri.parse(
-        'https://news.google.com/rss/search?q=$query&hl=en-US&gl=US&ceid=US:en');
-
-    print("URL--------------------${uri.toString()}");
-    final response = await http.get(uri);
-    if (response.statusCode != 200) return [];
-
-    final document = XmlDocument.parse(response.body);
-    final items = document.findAllElements('item');
-    final List<RailCrash> crashes = [];
-
-    for (final item in items) {
-      final title = item.getElement('title')?.text ?? 'Untitled';
-      final link = item.getElement('link')?.text ?? '';
-      final pubDate = item.getElement('pubDate')?.text ?? '';
-      final source = item.getElement('source')?.text ?? 'Google News';
-
-      // ✅ Try to extract thumbnail URL
-      // final mediaThumb =
-      //     item.findElements('media:thumbnail').firstOrNull?.getAttribute('url') ??
-      //         item.findElements('media:content').firstOrNull?.getAttribute('url') ??
-      //         '';
-
-      DateTime parsedDate = DateTime.now();
-
-      try {
-        parsedDate = HttpDate.parse(pubDate).toLocal(); // converts to local time
-      } catch (_) {
-        parsedDate = DateTime.now();
-      }
-
-      crashes.add(RailCrash(
-        title: title,
-        link: link,
-        source: source,
-        date: parsedDate,
-        state: state,
-        type: 'News',
-        // imageUrl: mediaThumb, // ✅ add this
-      ));
-    }
-
-    return crashes;
-  }
-
-  /// Combine both sources
-  static Future<List<RailCrash>> fetchCombined(String state) async {
-    final fra = await fetchFRA(state);
-    final news = await fetchGoogleNews(state);
-    return [...fra, ...news];
-  }
-
-  static Future<Map<String, dynamic>> fetchCombinedWithTitle(String state) async {
-    final fra = await fetchFRA(state);
+  static Future<Map<String, dynamic>> fetchCombinedWithTitle(String state, String stateAbbr) async {
+    final fra = await fetchFRA(stateAbbr);
     final newsResult = await fetchGoogleNewsWithTitle(state);
-    final combined = [...fra, ...newsResult['crashes']];
+    final combined = [...fra, ...newsResult['crashes'] as List<RailCrash>];
 
     return {
       'crashes': combined,
       'feedTitle': newsResult['feedTitle'],
     };
   }
+
   static Future<Map<String, dynamic>> fetchGoogleNewsWithTitle(String state) async {
-    final query =
-        'train+derailment+OR+train+crash+OR+railroad+accident+$state'
-        ''
-        ''
-        '';
-        // 'train+derailment+$state';
-    final uri = Uri.parse(
-        'https://news.google.com/rss/search?q=$query&hl=en-US&gl=US&ceid=US:en');
+    // Use Uri constructor so queryParameters are properly encoded.
+    // Quoted state name requires it to appear; "railroad accident" OR "train derailment"
+    // avoids matching plane/car crashes.
+    final q = '"$state" "railroad accident" OR "$state" "train derailment" OR "$state" "railroad crossing"';
+    final uri = Uri(
+      scheme: 'https',
+      host: 'news.google.com',
+      path: '/rss/search',
+      queryParameters: {'q': q, 'hl': 'en-US', 'gl': 'US', 'ceid': 'US:en'},
+    );
+    print('📰 News URL: $uri');
     final response = await http.get(uri);
     if (response.statusCode != 200) {
       return {'crashes': [], 'feedTitle': ''};
@@ -186,8 +179,11 @@ class RailCrashService {
 
       DateTime parsedDate = DateTime.now();
       try {
-        parsedDate = DateTime.parse(pubDate);
+        parsedDate = HttpDate.parse(pubDate).toLocal();
       } catch (_) {}
+
+      // Client-side filter: skip articles unrelated to railroads
+      if (!_isRailroadArticle(title)) continue;
 
       crashes.add(RailCrash(
         title: title,
@@ -196,17 +192,23 @@ class RailCrashService {
         date: parsedDate,
         state: state,
         type: 'News',
-
-
-
-
-
-
         imageUrl: mediaThumb,
       ));
     }
 
     return {'crashes': crashes, 'feedTitle': feedTitle};
+  }
+
+  static bool _isRailroadArticle(String title) {
+    final t = title.toLowerCase();
+    return t.contains('train') ||
+        t.contains('railroad') ||
+        t.contains('railway') ||
+        t.contains('derail') ||
+        t.contains('freight') ||
+        t.contains('amtrak') ||
+        t.contains('rail crossing') ||
+        t.contains('crossing gate');
   }
 }
 

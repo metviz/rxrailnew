@@ -3,6 +3,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 
+import '../../../modules/news/controllers/news_controller.dart';
 import '../../../routes/app_pages.dart';
 
 class BottomNavigationbarController extends GetxController {
@@ -55,19 +56,19 @@ class BottomNavigationbarController extends GetxController {
   }
   /// ✅ Drawer item action for News
   void openNews() {
+    // Force-delete cached controller so onInit re-runs with fresh state argument
+    Get.delete<NewsController>(force: true);
+
+    void navigate() {
+      final s = currentState.value.isEmpty ? 'North Carolina' : currentState.value;
+      debugPrint('📰 Opening News for state: "$s"');
+      Get.toNamed(Routes.NEWS, arguments: {'state': s});
+    }
+
     if (currentState.value.isEmpty) {
-      // If state not loaded yet, try again or show default
-      _getCurrentLocationState().then((_) {
-        Get.toNamed(
-          Routes.NEWS,
-          arguments: {'state': currentState.value},
-        );
-      });
+      _getCurrentLocationState().then((_) => navigate());
     } else {
-      Get.toNamed(
-        Routes.NEWS,
-        arguments: {'state': currentState.value},
-      );
+      navigate();
     }
   }
 }

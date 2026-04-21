@@ -6,15 +6,18 @@ class SafetyVideoModel {
   String? url;
   String? embed;
   String? thumbnail;
+  DateTime? publishedAt;
 
-  SafetyVideoModel(
-      {this.id,
-        this.title,
-        this.source,
-        this.duration,
-        this.url,
-        this.embed,
-        this.thumbnail});
+  SafetyVideoModel({
+    this.id,
+    this.title,
+    this.source,
+    this.duration,
+    this.url,
+    this.embed,
+    this.thumbnail,
+    this.publishedAt,
+  });
 
   SafetyVideoModel.fromJson(Map<String, dynamic> json) {
     id = json['id'];
@@ -24,17 +27,15 @@ class SafetyVideoModel {
     url = json['url'];
     embed = json['embed'];
     thumbnail = json['thumbnail'];
+    publishedAt = json['publishedAt'] != null
+        ? DateTime.tryParse(json['publishedAt'])
+        : null;
   }
 
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['id'] = this.id;
-    data['title'] = this.title;
-    data['source'] = this.source;
-    data['duration'] = this.duration;
-    data['url'] = this.url;
-    data['embed'] = this.embed;
-    data['thumbnail'] = this.thumbnail;
-    return data;
+  /// Extract the YouTube video ID from the url or embed field.
+  String get videoId {
+    final u = url ?? embed ?? '';
+    final m = RegExp(r'(?:v=|embed/|youtu\.be/|shorts/)([a-zA-Z0-9_-]{11})').firstMatch(u);
+    return m?.group(1) ?? '';
   }
 }

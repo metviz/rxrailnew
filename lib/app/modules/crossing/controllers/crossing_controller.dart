@@ -7871,8 +7871,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
               mapController.rotate(-bearing);
             }
             log_print.log('🧭 Bearing updated: ${bearing.toStringAsFixed(1)}°');
-          } else if (speed < 0.5 && !isHeadingUp.value == false) {
-            // Reset to north when stopped
+          } else if (speed < 0.5 && isHeadingUp.value) {
+            // Reset to north when stopped in heading-up mode
             mapController.rotate(0);
             mapRotation.value = 0;
           }

@@ -569,9 +569,7 @@ class SettingView extends GetView<SettingController> {
   }
 
   Widget _buildTestLogsSection() {
-    // Refresh info every time this widget is shown
-    controller.refreshLogInfo();
-
+    WidgetsBinding.instance.addPostFrameCallback((_) => controller.refreshLogInfo());
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

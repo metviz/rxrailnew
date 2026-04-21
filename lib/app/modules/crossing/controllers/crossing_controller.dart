@@ -21,10 +21,11 @@ import 'package:latlong2/latlong.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vibration/vibration.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:workmanager/workmanager.dart';
-import '../../../background_service.dart';
 import '../../../notification_service.dart';
+import '../../../services/background_location_service.dart';
 import '../../../services/crossing_cache_service.dart';
 import '../../../routes/app_pages.dart';
 import '../../../utils/app_color.dart';
@@ -41,6 +42,8 @@ void callbackDispatcher() {
         return _performBackgroundLocationCheck(inputData);
       case 'locationUpdate':
         return _handleLocationUpdate(inputData);
+      case 'weeklyTilePatch':
+        return _patchOfflineTiles();
       default:
         return Future.value(true);
     }
@@ -64,7 +67,6 @@ Future<bool> _performBackgroundLocationCheck(
 @pragma('vm:entry-point')
 Future<bool> _handleLocationUpdate(Map<String, dynamic>? inputData) async {
   try {
-    // Handle location update logic
     log_print.log('Location update task executed');
     return Future.value(true);
   } catch (e) {
@@ -73,8 +75,37 @@ Future<bool> _handleLocationUpdate(Map<String, dynamic>? inputData) async {
   }
 }
 
+@pragma('vm:entry-point')
+Future<bool> _patchOfflineTiles() async {
+  try {
+    log_print.log('🗺️ Weekly tile patch started');
+    final prefs = await SharedPreferences.getInstance();
+    final stateCode = prefs.getString('current_state_code') ?? 'NC';
+    final store = FMTCStore('offline_tiles_$stateCode');
+
+    // Only patch if the store exists
+    final stats = await store.stats.all;
+    if (stats.length == 0) {
+      log_print.log('🗺️ No offline tiles for $stateCode — skipping patch');
+      return true;
+    }
+
+    log_print.log('🗺️ $stateCode has ${stats.length} cached tiles — '
+        'cachedValidDuration:7d will expire stale tiles lazily on next map open');
+    // Do NOT reset the store: wiping tiles leaves the user with no offline
+    // coverage until they are online again.  The TileLayer's cachedValidDuration
+    // of 7 days already marks old tiles stale and re-fetches them on demand.
+    await prefs.setString(
+        'offline_map_last_updated', DateTime.now().toIso8601String());
+    log_print.log('✅ Weekly tile patch complete for $stateCode');
+    return true;
+  } catch (e) {
+    log_print.log('❌ Weekly tile patch error: $e');
+    return false;
+  }
+}
+
 class CrossingController extends GetxController with WidgetsBindingObserver {
-  final BackgroundService _backgroundService = BackgroundService();
   final SettingController settingController = Get.find<SettingController>();
   final player = AudioPlayer();
 
@@ -129,6 +160,19 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   void onInit() {
     super.onInit();
     WidgetsBinding.instance.addObserver(this);
+    _prefetchCrossingsInBackground();
+  }
+
+  // Silently pre-populate the crossing cache at app launch so the background
+  // isolate has data even if the user never opens the Crossing tab.
+  Future<void> _prefetchCrossingsInBackground() async {
+    try {
+      final cached = await CrossingCacheService.loadCrossings();
+      if (cached.isNotEmpty) return; // already populated
+      final pos = await Geolocator.getLastKnownPosition();
+      if (pos == null) return;
+      await fetchLocations(center: LatLng(pos.latitude, pos.longitude));
+    } catch (_) {}
   }
 
   @override
@@ -650,7 +694,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         maxZoom: 14,
         options: TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.example.cross_aware',
+          userAgentPackageName: 'com.rxrail.app',
         ),
       );
 
@@ -805,6 +849,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     if (isComplete) {
       offlineMapDownloadProgress.value = 100.0;
+
+      // Persist download timestamp
+      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('offline_map_last_updated', now.toIso8601String());
+      offlineMapLastUpdated.value = now;
 
       const AndroidNotificationDetails androidDetails =
           AndroidNotificationDetails(
@@ -1161,6 +1211,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
   // Add observable variable
   final hasOfflineMap = false.obs;
+  final Rxn<DateTime> offlineMapLastUpdated = Rxn<DateTime>();
   StreamSubscription<DownloadProgress>? _downloadSubscription;
   final RxBool isDownloadingOfflineMap = false.obs;
   final RxDouble offlineMapDownloadProgress = 0.0.obs;
@@ -1236,6 +1287,11 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   // Check on init
   Future<void> checkOfflineMapAvailability() async {
     hasOfflineMap.value = await isOfflineMapAvailable();
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('offline_map_last_updated');
+    if (raw != null) {
+      offlineMapLastUpdated.value = DateTime.tryParse(raw);
+    }
   }
 
   void initializeOnPageOpen() async {
@@ -1288,13 +1344,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       hasUserAdjustedZoom.value = false;
 
       // Fetch crossings for new location
-      final placemarks = await geocoding.placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-      final cityName =
-          placemarks.isNotEmpty ? placemarks[0].locality?.toUpperCase() : '';
-      await fetchLocations(cityName: cityName ?? "");
+      await fetchLocations(center: LatLng(position.latitude, position.longitude));
 
       log_print.log("✅ Location refreshed successfully");
 
@@ -1437,7 +1487,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     // ✅ Initialize services with error handling
     try {
       log_print.log("⚙️ Step 1: Initializing background service...");
-      await _backgroundService.initialize();
+      await Get.find<BackgroundLocationService>().startBackgroundTracking();
       log_print.log("✅ Step 1: Background service initialized");
     } catch (e) {
       log_print.log("⚠️ Background service error (non-critical): $e");
@@ -1512,11 +1562,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           userPosition.value!.latitude,
           userPosition.value!.longitude,
         );
-        final cityName =
-            placemarks.isNotEmpty ? placemarks[0].locality?.toUpperCase() : '';
-
-        log_print.log("🏙️ City detected: $cityName");
-        await fetchLocations(cityName: cityName ?? "");
+        await fetchLocations(center: LatLng(userPosition.value!.latitude, userPosition.value!.longitude));
         return;
       }
 
@@ -1533,15 +1579,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         "✅ Got initial position: ${pos.latitude}, ${pos.longitude}",
       );
 
-      final placemarks = await geocoding.placemarkFromCoordinates(
-        pos.latitude,
-        pos.longitude,
-      );
-      final cityName =
-          placemarks.isNotEmpty ? placemarks[0].locality?.toUpperCase() : '';
-
-      log_print.log("🏙️ City for crossings: $cityName");
-      await fetchLocations(cityName: cityName ?? "");
+      await fetchLocations(center: LatLng(pos.latitude, pos.longitude));
     } catch (e) {
       log_print.log("❌ Error in fetchInitialLocation: $e");
       errorMessage.value = e.toString();
@@ -1591,7 +1629,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     stopBackgroundDebugTimer();
 
     if (settingController.runInBackground.value) {
-      _backgroundService.stopForegroundService();
+      Get.find<BackgroundLocationService>().stopBackgroundTracking();
     }
     Workmanager().cancelByUniqueName("railwayCrossingCheck");
   }
@@ -1603,7 +1641,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     startBackgroundDebugTimer();
 
     if (settingController.runInBackground.value) {
-      _backgroundService.startForegroundService();
+      Get.find<BackgroundLocationService>().startBackgroundTracking();
       _saveLocationToPrefs();
     }
 
@@ -1618,7 +1656,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   void _onAppDetached() {
     log_print.log("App detached - ensuring background service is running");
     if (settingController.runInBackground.value) {
-      _backgroundService.startForegroundService();
+      Get.find<BackgroundLocationService>().startBackgroundTracking();
       _saveLocationToPrefs();
       // Re-register background tasks
       _registerBackgroundTasks();
@@ -1856,6 +1894,20 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       Workmanager().registerOneOffTask(
         "startBackgroundService",
         "startBackgroundService",
+      );
+
+      // Weekly tile patch: re-download z9-z14 for the current state
+      Workmanager().registerPeriodicTask(
+        "weeklyTilePatch",
+        "weeklyTilePatch",
+        frequency: const Duration(days: 7),
+        constraints: Constraints(
+          networkType: NetworkType.connected,
+          requiresBatteryNotLow: true,
+          requiresStorageNotLow: true,
+          requiresCharging: true, // only patch while charging
+        ),
+        existingWorkPolicy: ExistingWorkPolicy.keep,
       );
 
       log_print.log("Background tasks registered successfully");
@@ -2446,6 +2498,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   // }
 
   final RxDouble mapRotation = 0.0.obs;
+  final RxBool isHeadingUp = true.obs;
 
   void recenterMap() {
     if (userPosition.value != null) {
@@ -2455,6 +2508,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         18,
       );
       mapRotation.value = 0;
+      mapController.rotate(0);
       isProgrammaticMove.value = false;
       hasUserAdjustedZoom.value = false;
     }
@@ -2463,7 +2517,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   // Method to handle background service start
   Future<void> startBackgroundService() async {
     if (settingController.runInBackground.value) {
-      await _backgroundService.startForegroundService();
+      final bgService = Get.find<BackgroundLocationService>();
+      await bgService.startBackgroundTracking();
       _registerBackgroundTasks();
       log_print.log("Background service started");
     }
@@ -2471,7 +2526,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
   // Method to handle background service stop
   Future<void> stopBackgroundService() async {
-    await _backgroundService.stopForegroundService();
+    final bgService = Get.find<BackgroundLocationService>();
+    await bgService.stopBackgroundTracking();
     Workmanager().cancelAll();
 
     // Cancel the persistent notification
@@ -2731,57 +2787,80 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       );
       userPosition.value = pos;
 
-      final currentCityName = await geocoding
-          .placemarkFromCoordinates(pos.latitude, pos.longitude)
-          .then((placemarks) {
-            return placemarks.isNotEmpty
-                ? placemarks[0].locality?.toUpperCase() ?? ''
-                : '';
-          });
-
-      await fetchLocations(cityName: currentCityName);
+      await fetchLocations(center: LatLng(pos.latitude, pos.longitude));
     } catch (e) {
       errorMessage.value = "Error getting location: $e";
       isLoading.value = false;
     }
   }
 
-  Future<void> fetchLocations({String? cityName = ""}) async {
-    try {
-      final endpoint =
-          "https://data.transportation.gov/resource/vhwz-raag.json?cityname=$cityName";
-      final res = await http.get(Uri.parse(endpoint));
+  /// Fetch at-grade crossings within a ~25 km bounding box around [center].
+  /// Uses SoQL $where instead of cityname so rural/unincorporated areas work.
+  Future<void> fetchLocations({LatLng? center}) async {
+    final pos = center ??
+        (userPosition.value != null
+            ? LatLng(userPosition.value!.latitude, userPosition.value!.longitude)
+            : null);
+    if (pos == null) return;
 
-      if (res.statusCode == 200 && userPosition.value != null) {
-        var data = json.decode(res.body);
+    // ~0.225° ≈ 25 km at mid-latitudes — covers enough road ahead at any speed
+    const double delta = 0.225;
+    final double latMin = pos.latitude - delta;
+    final double latMax = pos.latitude + delta;
+    final double lngMin = pos.longitude - delta;
+    final double lngMax = pos.longitude + delta;
+
+    final appToken = dotenv.maybeGet('SOCRATA_APP_TOKEN') ?? '';
+
+    final uri = Uri.parse(
+      'https://data.transportation.gov/resource/vhwz-raag.json'
+      '?\$where=latitude>${latMin.toStringAsFixed(6)}'
+      ' AND latitude<${latMax.toStringAsFixed(6)}'
+      ' AND longitude>${lngMin.toStringAsFixed(6)}'
+      ' AND longitude<${lngMax.toStringAsFixed(6)}'
+      '&\$limit=10000',
+    );
+
+    try {
+      final headers = appToken.isNotEmpty && appToken != 'YOUR_TOKEN_HERE'
+          ? {'X-App-Token': appToken}
+          : <String, String>{};
+
+      final res = await http.get(uri, headers: headers);
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body) as List<dynamic>;
         final Map<String, TransportLocation> uniqueLocations = {};
 
-        for (var e in data) {
+        for (final e in data) {
           if (e['latitude'] == null || e['longitude'] == null) continue;
           if ((e['crossingposition'] ?? '').toString().trim().toLowerCase() !=
-              'at grade') {
-            continue;
-          }
+              'at grade') continue;
 
-          final lat = e['latitude'];
-          final lng = e['longitude'];
-          final street = (e['street'] ?? '').toString().trim().toLowerCase();
-          final key = "$lat,$lng,$street";
+          // Deduplicate by crossingid (authoritative FRA key)
+          final id = (e['crossingid'] as String? ?? '').trim();
+          if (id.isEmpty) continue;
 
           final location = TransportLocation.fromJson(e);
-          final newRevisionDate =
+          final newDate =
               DateTime.tryParse(e['revisiondate'] ?? '') ?? DateTime(1900);
 
-          if (!uniqueLocations.containsKey(key) ||
-              newRevisionDate.isAfter(
-                DateTime.tryParse(uniqueLocations[key]!.revisiondate ?? '') ??
+          if (!uniqueLocations.containsKey(id) ||
+              newDate.isAfter(
+                DateTime.tryParse(
+                        uniqueLocations[id]!.revisiondate ?? '') ??
                     DateTime(1900),
               )) {
-            uniqueLocations[key] = location;
+            uniqueLocations[id] = location;
           }
         }
 
         nearbyLocations.assignAll(uniqueLocations.values.toList());
+        log_print.log(
+            '✅ FRA: ${nearbyLocations.length} crossings loaded '
+            '(bbox ±${delta}° around ${pos.latitude.toStringAsFixed(4)}, '
+            '${pos.longitude.toStringAsFixed(4)})');
+
         // Persist to SharedPreferences for background isolate
         unawaited(CrossingCacheService.saveCrossings(
           nearbyLocations.map((c) => {
@@ -2792,10 +2871,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           }).toList(),
         ));
       } else {
-        errorMessage.value = "Failed to fetch data.";
+        log_print.log('❌ FRA fetch failed: ${res.statusCode}');
+        errorMessage.value = 'Failed to fetch crossing data (${res.statusCode})';
       }
     } catch (e) {
-      errorMessage.value = "Fetch error: $e";
+      log_print.log('❌ FRA fetch error: $e');
+      errorMessage.value = 'Fetch error: $e';
     } finally {
       isLoading.value = false;
     }
@@ -4420,7 +4501,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
                   newCenter.latitude,
                   newCenter.longitude,
                 ) >
-                2.0)) // 2 km threshold
+                15.0)) // 15 km — re-fetch when outside 60% of the 25 km bbox
     {
       _lastFetchCenter = newCenter;
       _fetchCrossingsForViewArea(newCenter);
@@ -4428,17 +4509,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> _fetchCrossingsForViewArea(LatLng center) async {
-    try {
-      final placemarks = await geocoding.placemarkFromCoordinates(
-        center.latitude,
-        center.longitude,
-      );
-      final city =
-          placemarks.isNotEmpty ? placemarks[0].locality?.toUpperCase() : '';
-      await fetchLocations(cityName: city ?? "");
-    } catch (e) {
-      log_print.log("Failed to fetch crossings for new area: $e");
-    }
+    await fetchLocations(center: center);
   }
 
   // // Show background notification
@@ -7786,7 +7857,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           userBearing.value = position.heading;
           log_print.log('✅ Position updated in state');
 
-          // Update bearing
+          // Update bearing and rotate map to heading-up when moving
           final speed = position.speed;
           if (speed >= 1.0 && _lastUserLatLng != null) {
             final bearing = _calculateBearing(
@@ -7796,7 +7867,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
               position.longitude,
             );
             mapRotation.value = bearing;
+            if (isHeadingUp.value) {
+              mapController.rotate(-bearing);
+            }
             log_print.log('🧭 Bearing updated: ${bearing.toStringAsFixed(1)}°');
+          } else if (speed < 0.5 && !isHeadingUp.value == false) {
+            // Reset to north when stopped
+            mapController.rotate(0);
+            mapRotation.value = 0;
           }
 
           _lastUserLatLng = LatLng(position.latitude, position.longitude);
@@ -8412,13 +8490,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       // Try to fetch crossings
       log_print.log('🔄 Attempting to fetch crossings...');
       if (userPosition.value != null) {
-        final placemarks = await geocoding.placemarkFromCoordinates(
-          userPosition.value!.latitude,
-          userPosition.value!.longitude,
-        );
-        final cityName =
-            placemarks.isNotEmpty ? placemarks[0].locality?.toUpperCase() : '';
-        await fetchLocations(cityName: cityName ?? "");
+        await fetchLocations(center: LatLng(userPosition.value!.latitude, userPosition.value!.longitude));
         log_print.log('✅ Crossings fetched: ${nearbyLocations.length}');
       }
     }

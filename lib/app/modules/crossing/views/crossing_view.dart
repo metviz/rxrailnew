@@ -295,6 +295,31 @@ class CrossingView extends GetView<CrossingController> {
 
           SizedBox(height: 10.h),
 
+          // Heading-up / North-up toggle
+          Obx(
+            () => FloatingActionButton(
+              heroTag: 'heading_up',
+              mini: true,
+              onPressed: () {
+                controller.isHeadingUp.value = !controller.isHeadingUp.value;
+                if (!controller.isHeadingUp.value) {
+                  controller.mapController.rotate(0);
+                }
+              },
+              backgroundColor: controller.isHeadingUp.value
+                  ? Colors.orange
+                  : Colors.grey[600],
+              child: Transform.rotate(
+                angle: controller.isHeadingUp.value
+                    ? (-controller.mapRotation.value * 3.14159265 / 180)
+                    : 0,
+                child: Icon(Icons.navigation, color: Colors.white, size: 18.sp),
+              ),
+            ),
+          ),
+
+          SizedBox(height: 10.h),
+
           // Refresh Location Button (during navigation)
           FloatingActionButton(
             heroTag: 'refresh_nav',
@@ -426,7 +451,7 @@ class CrossingView extends GetView<CrossingController> {
             controller.onMapMoved(position);
           },
           interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+            flags: InteractiveFlag.all,
           ),
           onTap: (_, __) => controller.showInfoWindow.value = false,
         ),
@@ -451,11 +476,14 @@ class CrossingView extends GetView<CrossingController> {
                   return TileLayer(
                     urlTemplate:
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.cross_aware',
-                    tileProvider:
-                        FMTCStore(
-                          'offline_tiles_${snapshot.data}',
-                        ).getTileProvider(),
+                    userAgentPackageName: 'com.rxrail.app',
+                    tileProvider: FMTCStore(
+                      'offline_tiles_${snapshot.data}',
+                    ).getTileProvider(
+                      settings: FMTCTileProviderSettings(
+                        cachedValidDuration: const Duration(days: 7),
+                      ),
+                    ),
                   );
                 }
                 // Fallback to online if state detection fails
@@ -463,7 +491,7 @@ class CrossingView extends GetView<CrossingController> {
                   urlTemplate:
                       'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                   subdomains: const ['a', 'b', 'c', 'd'],
-                  userAgentPackageName: 'com.example.cross_aware',
+                  userAgentPackageName: 'com.rxrail.app',
                 );
               },
             )
@@ -472,7 +500,7 @@ class CrossingView extends GetView<CrossingController> {
               urlTemplate:
                   'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
               subdomains: const ['a', 'b', 'c', 'd'],
-              userAgentPackageName: 'com.example.cross_aware',
+              userAgentPackageName: 'com.rxrail.app',
             ),
           TileLayer(
             urlTemplate:

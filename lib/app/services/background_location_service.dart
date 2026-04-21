@@ -4,10 +4,12 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'dart:developer' as log;
+import 'dart:developer' as dev;
 import 'package:RXrail/app/services/crossing_cache_service.dart';
+import 'package:RXrail/app/services/test_logger.dart';
 
 class BackgroundLocationService extends GetxService {
   static const String _lastPositionKey = 'last_position';
@@ -17,7 +19,7 @@ class BackgroundLocationService extends GetxService {
 
   final isRunning = false.obs;
   final Rxn<Position> currentPosition = Rxn<Position>();
-  
+
   // Callback for location updates
   Function(Position)? onLocationUpdate;
   StreamSubscription<dynamic>? _receivePortSubscription;
@@ -25,7 +27,7 @@ class BackgroundLocationService extends GetxService {
   void _startReceivePort() {
     final port = FlutterForegroundTask.receivePort;
     if (port == null) {
-      log.log('⚠️ FlutterForegroundTask.receivePort is null — location updates will not be received');
+      dev.log('⚠️ FlutterForegroundTask.receivePort is null — location updates will not be received');
       return;
     }
     _receivePortSubscription = port.listen((data) {
@@ -46,7 +48,7 @@ class BackgroundLocationService extends GetxService {
           currentPosition.value = position;
           onLocationUpdate?.call(position);
         } catch (e) {
-          log.log('Error parsing location from task: $e');
+          dev.log('Error parsing location from task: $e');
         }
       }
     });
@@ -55,6 +57,7 @@ class BackgroundLocationService extends GetxService {
   @override
   void onInit() {
     super.onInit();
+    TestLogger.init(tag: 'MAIN');
     _initForegroundTask();
     _startReceivePort();
     _checkIfServiceWasRunning();
@@ -63,9 +66,8 @@ class BackgroundLocationService extends GetxService {
   Future<void> _checkIfServiceWasRunning() async {
     final prefs = await SharedPreferences.getInstance();
     final wasRunning = prefs.getBool(_isServiceRunningKey) ?? false;
-    
+
     if (wasRunning) {
-      // Restart service if it was running before app restart
       await startBackgroundTracking();
     }
   }
@@ -95,15 +97,13 @@ class BackgroundLocationService extends GetxService {
 
   Future<bool> startBackgroundTracking() async {
     try {
-      // Check location permissions
       final permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        log.log('❌ Location permission denied');
+        TestLogger.log('❌ Location permission denied', tag: 'MAIN');
         return false;
       }
 
-      // Start foreground service
       final result = await FlutterForegroundTask.startService(
         serviceId: _serviceId,
         notificationTitle: 'RXrail Active',
@@ -118,13 +118,13 @@ class BackgroundLocationService extends GetxService {
         isRunning.value = true;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(_isServiceRunningKey, true);
-        log.log('✅ Background location service started');
+        TestLogger.log('✅ Background location service started', tag: 'MAIN');
         return true;
       }
 
       return false;
     } catch (e) {
-      log.log('❌ Error starting background service: $e');
+      TestLogger.log('❌ Error starting background service: $e', tag: 'MAIN');
       return false;
     }
   }
@@ -137,12 +137,12 @@ class BackgroundLocationService extends GetxService {
         isRunning.value = false;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(_isServiceRunningKey, false);
-        log.log('✅ Background location service stopped');
+        TestLogger.log('✅ Background location service stopped', tag: 'MAIN');
       }
 
       return result is ServiceRequestSuccess;
     } catch (e) {
-      log.log('❌ Error stopping background service: $e');
+      TestLogger.log('❌ Error stopping background service: $e', tag: 'MAIN');
       return false;
     }
   }
@@ -151,7 +151,7 @@ class BackgroundLocationService extends GetxService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final positionJson = prefs.getString(_lastPositionKey);
-      
+
       if (positionJson != null) {
         final data = jsonDecode(positionJson);
         return Position(
@@ -168,7 +168,7 @@ class BackgroundLocationService extends GetxService {
         );
       }
     } catch (e) {
-      log.log('Error loading last position: $e');
+      dev.log('Error loading last position: $e');
     }
     return null;
   }
@@ -181,7 +181,7 @@ class BackgroundLocationService extends GetxService {
   }
 }
 
-// Top-level constants
+// ── Top-level constants ────────────────────────────────────────────────────────
 const String _kLastPositionKey = 'last_position';
 const int _kDistanceFilterMeters = 10;
 
@@ -190,7 +190,7 @@ double _haversineDistanceMeters(
   double lat1, double lon1,
   double lat2, double lon2,
 ) {
-  const r = 6371000.0; // Earth radius in meters
+  const r = 6371000.0;
   final dLat = (lat2 - lat1) * math.pi / 180;
   final dLon = (lon2 - lon1) * math.pi / 180;
   final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
@@ -202,9 +202,6 @@ double _haversineDistanceMeters(
 }
 
 /// Fire a high-priority crossing alert from within the background isolate.
-/// Uses a stable notification ID per crossing so repeated firings
-/// update the same notification rather than stacking.
-/// Shows a crossing alert and returns the notification ID used.
 Future<int> _showCrossingAlert(
   FlutterLocalNotificationsPlugin plugin,
   String crossingId,
@@ -238,7 +235,7 @@ Future<int> _showCrossingAlert(
   return notifId;
 }
 
-// Top-level callback function
+// ── Background isolate entry point ─────────────────────────────────────────────
 @pragma('vm:entry-point')
 void startLocationTracking() {
   FlutterForegroundTask.setTaskHandler(LocationTaskHandler());
@@ -247,45 +244,38 @@ void startLocationTracking() {
 class LocationTaskHandler extends TaskHandler {
   StreamSubscription<Position>? _positionStream;
 
-  /// How many times we've alerted for each crossing this visit. Reset when user leaves.
   final Map<String, int> _alertCount = {};
-
-  /// Notification IDs currently shown, keyed by crossing ID. Used to cancel on exit.
   final Map<String, int> _activeNotifIds = {};
-
   static const int _maxAlertsPerVisit = 2;
 
-  final FlutterLocalNotificationsPlugin _notifPlugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _notifPlugin =
+      FlutterLocalNotificationsPlugin();
   bool _notifInitialized = false;
 
   Position? _lastPosition;
+  DateTime? _lastFraFetch;
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
-    log.log('🚀 Location tracking started');
-    
-    // Start listening to location updates
+    await TestLogger.init(tag: 'BG');
+    await TestLogger.log('🚀 Location tracking started', tag: 'BG');
+
     const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: _kDistanceFilterMeters, // Update every 10 meters
+      accuracy: LocationAccuracy.best,
+      distanceFilter: _kDistanceFilterMeters,
     );
 
-    // Initialize notification plugin once
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    await _notifPlugin.initialize(const InitializationSettings(android: androidInit));
+    await _notifPlugin
+        .initialize(const InitializationSettings(android: androidInit));
     _notifInitialized = true;
 
     _positionStream = Geolocator.getPositionStream(
       locationSettings: locationSettings,
     ).listen(
       (Position position) async {
-        log.log('📍 Location update: ${position.latitude}, ${position.longitude}');
         _lastPosition = position;
-        
-        // Save position to SharedPreferences
         await _savePositionToPrefs(position);
-        
-        // Send to main isolate
         FlutterForegroundTask.sendDataToMain({
           'type': 'location',
           'latitude': position.latitude,
@@ -296,21 +286,25 @@ class LocationTaskHandler extends TaskHandler {
           'speed': position.speed,
           'timestamp': position.timestamp.millisecondsSinceEpoch,
         });
+        // Check proximity on every GPS fix, not just on the repeat timer.
+        // At driving speed (~60 km/h = 17 m/s) the 5 s timer fires every
+        // ~85 m — a crossing zone could be entered and exited between ticks.
+        await _checkProximity(source: 'GPS');
       },
       onError: (error) {
-        log.log('❌ Location stream error: $error');
+        TestLogger.log('❌ Location stream error: $error', tag: 'BG');
       },
     );
   }
 
   @override
   void onRepeatEvent(DateTime timestamp) {
-    _checkProximity();
+    _checkProximity(source: 'TIMER');
   }
 
-  Future<void> _checkProximity() async {
+  Future<void> _checkProximity({String source = 'TIMER'}) async {
     try {
-      // 1. Use stream position, fall back to last saved SharedPreferences position
+      // 1. Resolve position
       Position? position = _lastPosition;
       if (position == null) {
         final prefs = await SharedPreferences.getInstance();
@@ -325,85 +319,178 @@ class LocationTaskHandler extends TaskHandler {
               altitude: 0.0,
               heading: 0.0,
               speed: 0.0,
-              timestamp: DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int),
+              timestamp: DateTime.fromMillisecondsSinceEpoch(
+                  data['timestamp'] as int),
               speedAccuracy: 0.0,
               altitudeAccuracy: 0.0,
               headingAccuracy: 0.0,
             );
-            print('⏰ _checkProximity: using saved position ${position.latitude}, ${position.longitude}');
+            await TestLogger.log(
+              '[$source] using saved position '
+              '${position.latitude.toStringAsFixed(5)}, '
+              '${position.longitude.toStringAsFixed(5)}',
+              tag: 'BG',
+            );
           } catch (_) {}
         }
         if (position == null) {
-          print('⏰ _checkProximity: no position available yet');
+          await TestLogger.log('[$source] no position yet — skipping', tag: 'BG');
           return;
         }
       }
 
-      // 2. Load settings from SharedPreferences (isolate-safe)
-      final settings = await CrossingCacheService.loadWarningSettings();
-      if (!settings.enabled) return;
-
-      // 3. Load crossings from SharedPreferences
-      final crossings = await CrossingCacheService.loadCrossings();
-      if (crossings.isEmpty) {
-        log.log('⏰ onRepeatEvent: no cached crossings');
+      // 2. Accuracy gate — skip noisy fixes
+      if (position.accuracy > 50) {
+        await TestLogger.log(
+          '[$source] accuracy=${position.accuracy.round()}m > 50m — skipping',
+          tag: 'BG',
+        );
         return;
       }
 
-      // 4. Check each crossing
+      // 3. Load settings
+      final settings = await CrossingCacheService.loadWarningSettings();
+      if (!settings.enabled) return;
+
+      // 4. Load crossings — fetch from FRA if cache is empty
+      List<Map<String, dynamic>> crossings =
+          await CrossingCacheService.loadCrossings();
+      if (crossings.isEmpty) {
+        crossings = await _fetchAndCacheCrossings(position);
+        if (crossings.isEmpty) {
+          await TestLogger.log('[$source] no cached crossings', tag: 'BG');
+          return;
+        }
+      }
+
       final double threshold = settings.distanceMeters;
-      final Set<String> stillNear = {}; // hysteresis zone: within 2x threshold
+      final Set<String> stillNear = {};
 
       for (final crossing in crossings) {
         final id = crossing['crossingid'] as String? ?? '';
         if (id.isEmpty) continue;
         final lat = double.tryParse(crossing['latitude'] as String? ?? '') ?? 0;
-        final lng = double.tryParse(crossing['longitude'] as String? ?? '') ?? 0;
+        final lng =
+            double.tryParse(crossing['longitude'] as String? ?? '') ?? 0;
         final street = crossing['street'] as String? ?? 'Railway Crossing';
-
         if (lat == 0 || lng == 0) continue;
 
         final distance = _haversineDistanceMeters(
           position.latitude, position.longitude, lat, lng,
         );
 
-        if (distance <= threshold * 2) {
-          stillNear.add(id); // within hysteresis zone — keep alert state
-        }
+        if (distance <= threshold * 2) stillNear.add(id);
+
         if (distance <= threshold) {
           final count = _alertCount[id] ?? 0;
           if (count < _maxAlertsPerVisit) {
             _alertCount[id] = count + 1;
-            print('🔔 BG Crossing alert #${count + 1}: $street — ${distance.round()}m');
+            await TestLogger.log(
+              '[$source] 🔔 ALERT #${count + 1} — $street ${distance.round()}m '
+              '(acc=${position.accuracy.round()}m spd=${position.speed.toStringAsFixed(1)}m/s)',
+              tag: 'BG',
+            );
             if (_notifInitialized) {
-              final notifId = await _showCrossingAlert(_notifPlugin, id, street, distance);
+              final notifId =
+                  await _showCrossingAlert(_notifPlugin, id, street, distance);
               _activeNotifIds[id] = notifId;
             }
           }
         }
       }
 
-      // 5. When user leaves hysteresis zone: cancel notification + reset alert count
-      final departed = _alertCount.keys.where((id) => !stillNear.contains(id)).toList();
+      // 5. Hysteresis — cancel notifications when user departs
+      final departed =
+          _alertCount.keys.where((id) => !stillNear.contains(id)).toList();
       for (final id in departed) {
         final notifId = _activeNotifIds.remove(id);
         if (notifId != null) {
           await _notifPlugin.cancel(notifId);
-          print('🔕 Cancelled notification for crossing $id');
+          await TestLogger.log('[$source] 🔕 departed crossing $id', tag: 'BG');
         }
         _alertCount.remove(id);
       }
 
-      print('⏰ BG checked ${crossings.length} crossings, threshold=${threshold.round()}m, '
-          'pos=${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}');
+      await TestLogger.log(
+        '[$source] checked ${crossings.length} crossings '
+        'threshold=${threshold.round()}m '
+        'pos=${position.latitude.toStringAsFixed(5)},${position.longitude.toStringAsFixed(5)} '
+        'acc=${position.accuracy.round()}m '
+        'spd=${position.speed.toStringAsFixed(1)}m/s',
+        tag: 'BG',
+      );
     } catch (e) {
-      log.log('❌ onRepeatEvent error: $e');
+      await TestLogger.log('[$source] ❌ error: $e', tag: 'BG');
+    }
+  }
+
+  // Fetch at-grade crossings from FRA API when cache is empty.
+  // Throttled to once per 30 minutes to avoid hammering the API.
+  Future<List<Map<String, dynamic>>> _fetchAndCacheCrossings(
+      Position position) async {
+    final now = DateTime.now();
+    if (_lastFraFetch != null &&
+        now.difference(_lastFraFetch!).inMinutes < 30) {
+      return [];
+    }
+    // Set before attempt so failures don't cause hammering every 5 seconds
+    _lastFraFetch = now;
+    try {
+      const double delta = 0.225; // ~25 km
+      final latMin = position.latitude - delta;
+      final latMax = position.latitude + delta;
+      final lngMin = position.longitude - delta;
+      final lngMax = position.longitude + delta;
+
+      // Use Uri constructor so query parameters are properly encoded
+      final uri = Uri.https(
+        'data.transportation.gov',
+        '/resource/vhwz-raag.json',
+        {
+          '\$where': 'latitude>${latMin.toStringAsFixed(6)}'
+              ' AND latitude<${latMax.toStringAsFixed(6)}'
+              ' AND longitude>${lngMin.toStringAsFixed(6)}'
+              ' AND longitude<${lngMax.toStringAsFixed(6)}',
+          '\$limit': '10000',
+        },
+      );
+
+      final res = await http.get(uri).timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) {
+        await TestLogger.log(
+            '[BG] FRA fetch failed: ${res.statusCode}', tag: 'BG');
+        return [];
+      }
+
+      final data = jsonDecode(res.body) as List<dynamic>;
+      final crossings = <Map<String, dynamic>>[];
+      for (final e in data) {
+        if (e['latitude'] == null || e['longitude'] == null) continue;
+        if ((e['crossingposition'] ?? '').toString().trim().toLowerCase() !=
+            'at grade') continue;
+        final id = (e['crossingid'] as String? ?? '').trim();
+        if (id.isEmpty) continue;
+        crossings.add({
+          'crossingid': id,
+          'latitude': e['latitude'].toString(),
+          'longitude': e['longitude'].toString(),
+          'street': e['street'] ?? 'Railway Crossing',
+        });
+      }
+
+      await CrossingCacheService.saveCrossings(crossings);
+      await TestLogger.log(
+          '[BG] fetched ${crossings.length} crossings from FRA', tag: 'BG');
+      return crossings;
+    } catch (e) {
+      await TestLogger.log('[BG] FRA fetch error: $e', tag: 'BG');
+      return [];
     }
   }
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
-    log.log('🛑 Location tracking stopped');
+    await TestLogger.log('🛑 Location tracking stopped', tag: 'BG');
     await _positionStream?.cancel();
     _positionStream = null;
   }
@@ -417,7 +504,6 @@ class LocationTaskHandler extends TaskHandler {
 
   @override
   void onNotificationPressed() {
-    // Handle notification tap - you can send data to open the app
     FlutterForegroundTask.launchApp('/');
   }
 
@@ -428,11 +514,12 @@ class LocationTaskHandler extends TaskHandler {
         'latitude': position.latitude,
         'longitude': position.longitude,
         'accuracy': position.accuracy,
+        'altitude': position.altitude,
         'timestamp': position.timestamp.millisecondsSinceEpoch,
       });
       await prefs.setString(_kLastPositionKey, positionJson);
     } catch (e) {
-      log.log('Error saving position: $e');
+      dev.log('Error saving position: $e');
     }
   }
 }

@@ -151,6 +151,26 @@ class SettingView extends GetView<SettingController> {
               ),
             ),
             SizedBox(height: 25.h),
+            // Test Logs Section
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12.r),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(12.w),
+                child: _buildTestLogsSection(),
+              ),
+            ),
+            SizedBox(height: 25.h),
             // Location Section
             Container(
               decoration: BoxDecoration(
@@ -188,68 +208,172 @@ class SettingView extends GetView<SettingController> {
   }
 
   Widget _buildOfflineMapSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "Download Offline Map",
-              style: TextStyle(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w600,
-                color: Colors.black,
-              ),
-            ),
+    final cc = controller.crossingController;
+    return Obx(() {
+      final isDownloading = cc.isDownloadingOfflineMap.value;
+      final hasMap = cc.hasOfflineMap.value;
+      final progress = cc.offlineMapDownloadProgress.value;
+      final downloaded = cc.downloadedTiles.value;
+      final total = cc.totalTiles.value;
 
-            InkWell(
-              borderRadius: BorderRadius.circular(20.r),
-              onTap: () async {
-                await controller.crossingController
-                    .downloadOfflineMapByCurrentState();
-                await controller.crossingController
-                    .checkOfflineMapAvailability();
-              },
-              child: AnimatedContainer(
-                duration: Duration(milliseconds: 200),
-                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFFFFC107), Color(0xFFFFD54F)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20.r),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      offset: Offset(0, 4),
-                      blurRadius: 8,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row: label + action button
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Download Offline Map",
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
+                      ),
                     ),
+                    if (hasMap && !isDownloading)
+                      Padding(
+                        padding: EdgeInsets.only(top: 2.h),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.check_circle,
+                                    color: Colors.green, size: 13.sp),
+                                SizedBox(width: 4.w),
+                                Text(
+                                  "Map downloaded",
+                                  style: TextStyle(
+                                    fontSize: 12.sp,
+                                    color: Colors.green[700],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (cc.offlineMapLastUpdated.value != null)
+                              Padding(
+                                padding: EdgeInsets.only(top: 2.h),
+                                child: Text(
+                                  "Last updated: ${_formatMapDate(cc.offlineMapLastUpdated.value!)}",
+                                  style: TextStyle(
+                                    fontSize: 11.sp,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon(Icons.download_rounded, color: AppColors.black, size: 18.sp),
-                    // SizedBox(width: 8.w),
-                    Text(
-                      "Download",
+              ),
+              SizedBox(width: 8.w),
+              if (isDownloading)
+                InkWell(
+                  borderRadius: BorderRadius.circular(20.r),
+                  onTap: () => cc.cancelOfflineMapDownload(),
+                  child: Container(
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(20.r),
+                      border: Border.all(color: Colors.red.shade300),
+                    ),
+                    child: Text(
+                      "Cancel",
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        color: Colors.red[700],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                InkWell(
+                  borderRadius: BorderRadius.circular(20.r),
+                  onTap: () async {
+                    await cc.downloadOfflineMapByCurrentState();
+                    await cc.checkOfflineMapAvailability();
+                  },
+                  child: AnimatedContainer(
+                    duration: Duration(milliseconds: 200),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFFFC107), Color(0xFFFFD54F)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20.r),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          offset: Offset(0, 4),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      hasMap ? "Re-download" : "Download",
                       style: TextStyle(
                         fontSize: 14.sp,
                         color: AppColors.black,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
+                  ),
                 ),
+            ],
+          ),
+
+          // Progress area — only shown while downloading
+          if (isDownloading) ...[
+            SizedBox(height: 12.h),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  total > 0
+                      ? "$downloaded / $total tiles"
+                      : "Preparing download…",
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  "${progress.toStringAsFixed(0)}%",
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 6.h),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4.r),
+              child: LinearProgressIndicator(
+                value: progress / 100,
+                minHeight: 6.h,
+                backgroundColor: Colors.grey[200],
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(Color(0xFFFFC107)),
               ),
             ),
           ],
-        ),
-      ],
-    );
+        ],
+      );
+    });
   }
 
   Widget _buildSectionTitle(String title) {
@@ -352,7 +476,7 @@ class SettingView extends GetView<SettingController> {
               padding: EdgeInsets.all(8.w),
               value: controller.warningDistance.value,
               min: 100,
-              max: 2000,
+              max: 500,
               onChanged: controller.updateWarningDistance,
             ),
           ),
@@ -444,6 +568,120 @@ class SettingView extends GetView<SettingController> {
     );
   }
 
+  Widget _buildTestLogsSection() {
+    // Refresh info every time this widget is shown
+    controller.refreshLogInfo();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('Test Logs'),
+        SizedBox(height: 10.h),
+        Text(
+          'Logs are saved to device storage while the app runs. '
+          'Connect via USB and run the ADB command to retrieve them.',
+          style: TextStyle(fontSize: 12.sp, color: Colors.grey[600]),
+        ),
+        SizedBox(height: 12.h),
+
+        // File path + size
+        Obx(() => Container(
+              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8.r),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    controller.logFilePath.value.isEmpty
+                        ? 'No log file yet — start tracking to begin'
+                        : controller.logFilePath.value,
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      color: Colors.grey[700],
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  if (controller.logFilePath.value.isNotEmpty) ...[
+                    SizedBox(height: 4.h),
+                    Text(
+                      'Size: ${controller.logFileSize.value}',
+                      style: TextStyle(fontSize: 11.sp, color: Colors.grey[500]),
+                    ),
+                  ],
+                ],
+              ),
+            )),
+
+        SizedBox(height: 12.h),
+
+        // Action buttons
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20.r),
+                onTap: () => controller.copyAdbCommand(),
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 10.h),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFFC107), Color(0xFFFFD54F)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20.r),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        offset: const Offset(0, 3),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      'Copy ADB Command',
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: 10.w),
+            InkWell(
+              borderRadius: BorderRadius.circular(20.r),
+              onTap: () => controller.clearLogs(),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 10.h),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(20.r),
+                  border: Border.all(color: Colors.red.shade300),
+                ),
+                child: Text(
+                  'Clear',
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red[700],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildLocationPermissionItem() {
     return Obx(() {
       final isGranted = controller.isLocationPermissionGranted.value;
@@ -527,5 +765,13 @@ class SettingView extends GetView<SettingController> {
         ],
       );
     });
+  }
+
+  String _formatMapDate(DateTime dt) {
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
 }

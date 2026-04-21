@@ -569,7 +569,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //   );
   // }
   // ✅ COMPLETELY REWRITTEN download method
-  Future<void> downloadOfflineMapForState(String stateCode) async {
+  Future<void> downloadOfflineMapForState(String stateCode, {bool resume = false}) async {
     if (isDownloadingOfflineMap.value) {
       Get.snackbar(
         "Download in Progress",
@@ -643,9 +643,9 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     final store = FMTCStore('offline_tiles_$stateCode');
 
     try {
-      // Check if already downloaded
+      // Check if already downloaded (skip dialog when resuming a partial download)
       final exists = await store.manage.ready;
-      if (exists) {
+      if (exists && !resume) {
         final stats = await store.stats.all;
         if (stats.length > 0) {
           final shouldRedownload = await Get.dialog<bool>(
@@ -1346,7 +1346,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   Future<void> resumeOfflineMapDownload() async {
     final prefs = await SharedPreferences.getInstance();
     final stateCode = prefs.getString('offline_map_partial_state') ?? _getCurrentStateCode();
-    await downloadOfflineMapForState(stateCode);
+    await downloadOfflineMapForState(stateCode, resume: true);
   }
 
   String _getCurrentStateCode() => 'NC';

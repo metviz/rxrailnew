@@ -79,6 +79,8 @@ Future<bool> _handleLocationUpdate(Map<String, dynamic>? inputData) async {
 Future<bool> _patchOfflineTiles() async {
   try {
     log_print.log('🗺️ Weekly tile patch started');
+    // Workmanager runs in a separate isolate — FMTC must be re-initialized here.
+    await FMTCObjectBoxBackend().initialise();
     final prefs = await SharedPreferences.getInstance();
     final stateCode = prefs.getString('current_state_code') ?? 'NC';
     final store = FMTCStore('offline_tiles_$stateCode');
@@ -169,8 +171,15 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     try {
       final cached = await CrossingCacheService.loadCrossings();
       if (cached.isNotEmpty) return; // already populated
-      final pos = await Geolocator.getLastKnownPosition();
-      if (pos == null) return;
+      Position? pos = await Geolocator.getLastKnownPosition();
+      // On fresh install or post-reboot, last known position is null — fall
+      // back to a live fix so the background isolate has data on cold start.
+      pos ??= await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
       await fetchLocations(center: LatLng(pos.latitude, pos.longitude));
     } catch (_) {}
   }
@@ -7871,8 +7880,10 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
               mapController.rotate(-bearing);
             }
             log_print.log('🧭 Bearing updated: ${bearing.toStringAsFixed(1)}°');
-          } else if (speed < 0.5 && isHeadingUp.value) {
-            // Reset to north when stopped in heading-up mode
+          } else if (speed < 1.0 && isHeadingUp.value) {
+            // Reset to north when slowing or stopped in heading-up mode.
+            // Threshold matches the activate threshold (1.0) to avoid a
+            // dead-band where the map rotation freezes on deceleration.
             mapController.rotate(0);
             mapRotation.value = 0;
           }

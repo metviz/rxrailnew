@@ -212,15 +212,19 @@ Future<int> _showCrossingAlert(
       ? '${distanceMeters.round()}m away'
       : '${(distanceMeters / 1000).toStringAsFixed(1)}km away';
 
-  const androidDetails = AndroidNotificationDetails(
-    'railwaycrossingalerts',
+  final prefs = await SharedPreferences.getInstance();
+  final soundEnabled = prefs.getBool('isWarningSoundEnabled') ?? true;
+  final vibrationEnabled = prefs.getBool('isVibrationEnabled') ?? true;
+
+  final androidDetails = AndroidNotificationDetails(
+    'railway_crossing_alerts',
     'Railway Crossing Alerts',
     channelDescription: 'High priority alerts for nearby railway crossings',
     importance: Importance.high,
     priority: Priority.high,
     enableLights: true,
-    enableVibration: true,
-    playSound: true,
+    enableVibration: vibrationEnabled,
+    playSound: soundEnabled,
     autoCancel: true,
     icon: '@mipmap/ic_launcher',
   );
@@ -295,7 +299,11 @@ class LocationTaskHandler extends TaskHandler {
         // Check proximity on every GPS fix, not just on the repeat timer.
         // At driving speed (~60 km/h = 17 m/s) the 5 s timer fires every
         // ~85 m — a crossing zone could be entered and exited between ticks.
-        await _checkProximity(source: 'GPS');
+        // Guard against concurrent executions (GPS fixes can arrive faster
+        // than _checkProximity completes at highway speed).
+        if (_checkInProgress) return;
+        _checkInProgress = true;
+        _checkProximity(source: 'GPS').whenComplete(() => _checkInProgress = false);
       },
       onError: (error) {
         TestLogger.log('❌ Location stream error: $error', tag: 'BG');

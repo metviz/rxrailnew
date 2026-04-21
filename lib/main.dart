@@ -12,7 +12,11 @@ import 'app/utils/app_strings.dart';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env');
+  // .env is not bundled as an asset (secrets must not ship in the APK).
+  // Load gracefully so missing file doesn't crash a clean build.
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {}
   // HttpOverrides.global = MyHttpOverrides();
   await PreferencesManager.getInstance();
   await NotificationService().init();

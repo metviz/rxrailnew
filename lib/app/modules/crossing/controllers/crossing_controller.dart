@@ -1009,10 +1009,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       _downloadSubscription = null;
 
       if (_currentDownloadingState != null) {
-        final store = FMTCStore('offline_tiles_$_currentDownloadingState');
-        await store.download.cancel();
-
-        // Persist partial progress so the UI can offer a Resume button.
+        // Persist partial state FIRST — before any FMTC calls that may throw.
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('offline_map_partial_state', _currentDownloadingState!);
         await prefs.setInt('offline_map_partial_downloaded', downloadedTiles.value);
@@ -1020,6 +1017,13 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         hasPartialDownload.value = true;
         partialDownloadedTiles.value = downloadedTiles.value;
         partialTotalTiles.value = totalTiles.value;
+
+        try {
+          final store = FMTCStore('offline_tiles_$_currentDownloadingState');
+          await store.download.cancel();
+        } catch (e) {
+          log_print.log("FMTC cancel error (non-fatal): $e");
+        }
 
         await _cleanupDownload(_currentDownloadingState!, isCancelled: true);
       }

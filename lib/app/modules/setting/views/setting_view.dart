@@ -372,6 +372,63 @@ class SettingView extends GetView<SettingController> {
                     ),
                   ],
                 )
+              else if (hasMap)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Resume here means "verify server against cache and
+                    // download any missing tiles" — FMTC's skipExistingTiles
+                    // makes this cheap, and resumeOfflineMapDownload() skips
+                    // the wipe-confirmation dialog.
+                    InkWell(
+                      borderRadius: BorderRadius.circular(20.r),
+                      onTap: () async {
+                        await cc.resumeOfflineMapDownload();
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 16.w, vertical: 8.h),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(20.r),
+                          border: Border.all(color: Colors.blue.shade300),
+                        ),
+                        child: Text(
+                          "Resume",
+                          style: TextStyle(
+                            fontSize: 14.sp,
+                            color: Colors.blue[700],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(20.r),
+                      onTap: () async {
+                        await cc.downloadOfflineMapByCurrentState();
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 16.w, vertical: 8.h),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[50],
+                          borderRadius: BorderRadius.circular(20.r),
+                          border: Border.all(color: Colors.orange.shade300),
+                        ),
+                        child: Text(
+                          "Re-download",
+                          style: TextStyle(
+                            fontSize: 14.sp,
+                            color: Colors.orange[700],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
               else
                 InkWell(
                   borderRadius: BorderRadius.circular(20.r),
@@ -398,7 +455,7 @@ class SettingView extends GetView<SettingController> {
                       ],
                     ),
                     child: Text(
-                      hasMap ? "Re-download" : "Download",
+                      "Download",
                       style: TextStyle(
                         fontSize: 14.sp,
                         color: AppColors.black,

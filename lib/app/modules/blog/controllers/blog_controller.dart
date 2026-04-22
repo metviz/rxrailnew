@@ -103,6 +103,10 @@ class BlogController extends GetxController {
       final List<dynamic> jsonData = json.decode(jsonString);
       final staticVideos = jsonData.map((j) => SafetyVideoModel.fromJson(j)).toList();
 
+      // Publish curated list immediately so it survives any downstream failure
+      // (missing .env, YouTube API error, network timeout, etc.).
+      safetyVideos.value = staticVideos;
+
       // Fetch latest from YouTube API in parallel
       final futures = _searchQueries.map(_fetchYouTubeSearch);
       final results = await Future.wait(futures);
@@ -134,6 +138,9 @@ class BlogController extends GetxController {
   }
 
   static Future<List<SafetyVideoModel>> _fetchYouTubeSearch(String query) async {
+    // Guard against NotInitializedError when .env is missing (CI / fresh
+    // clone). flutter_dotenv throws on .env access if load() didn't succeed.
+    if (!dotenv.isInitialized) return [];
     final apiKey = dotenv.env['YOUTUBE_API_KEY'] ?? '';
     if (apiKey.isEmpty) return [];
 

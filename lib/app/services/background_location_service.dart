@@ -216,9 +216,29 @@ Future<int> _showCrossingAlert(
   final soundEnabled = prefs.getBool('isWarningSoundEnabled') ?? true;
   final vibrationEnabled = prefs.getBool('isVibrationEnabled') ?? true;
 
+  // Android 8+ locks sound/vibration on a NotificationChannel at creation
+  // time; later mutations via AndroidNotificationDetails are ignored. Route
+  // through one of four pre-configured channels so the user's toggles take
+  // effect on the next alert.
+  final String channelId;
+  final String channelName;
+  if (soundEnabled && vibrationEnabled) {
+    channelId = 'railway_crossing_sound_vibe';
+    channelName = 'Railway Crossings (Sound + Vibration)';
+  } else if (soundEnabled) {
+    channelId = 'railway_crossing_sound';
+    channelName = 'Railway Crossings (Sound)';
+  } else if (vibrationEnabled) {
+    channelId = 'railway_crossing_vibe';
+    channelName = 'Railway Crossings (Vibration)';
+  } else {
+    channelId = 'railway_crossing_silent';
+    channelName = 'Railway Crossings (Silent)';
+  }
+
   final androidDetails = AndroidNotificationDetails(
-    'railway_crossing_alerts',
-    'Railway Crossing Alerts',
+    channelId,
+    channelName,
     channelDescription: 'High priority alerts for nearby railway crossings',
     importance: Importance.high,
     priority: Priority.high,
@@ -229,7 +249,7 @@ Future<int> _showCrossingAlert(
     icon: '@mipmap/ic_launcher',
   );
 
-  final notifId = crossingId.hashCode.abs() % 10000;
+  final notifId = crossingId.hashCode.abs();
   await plugin.show(
     notifId,
     '⚠️ Railway Crossing Ahead',
@@ -341,10 +361,21 @@ class LocationTaskHandler extends TaskHandler {
               altitudeAccuracy: 0.0,
               headingAccuracy: 0.0,
             );
+            // Reject stale saved fixes to avoid false alerts near a
+            // previously-visited crossing after service kill / reboot.
+            final age = DateTime.now().difference(position.timestamp);
+            if (age > const Duration(seconds: 60)) {
+              await TestLogger.log(
+                '[$source] saved position is ${age.inSeconds}s old — skipping',
+                tag: 'BG',
+              );
+              return;
+            }
             await TestLogger.log(
               '[$source] using saved position '
               '${position.latitude.toStringAsFixed(5)}, '
-              '${position.longitude.toStringAsFixed(5)}',
+              '${position.longitude.toStringAsFixed(5)} '
+              '(${age.inSeconds}s old)',
               tag: 'BG',
             );
           } catch (_) {}
@@ -461,14 +492,15 @@ class LocationTaskHandler extends TaskHandler {
       final lngMin = position.longitude - delta;
       final lngMax = position.longitude + delta;
 
-      // Use Uri.parse with a raw URL so Socrata's $where / $limit params are
-      // NOT percent-encoded (Uri.https() encodes '$' → '%24', causing 400).
+      // Uri.parse avoids Uri.https() percent-encoding '$' → '%24'.
+      // latitude/longitude are *text* columns in Socrata, so the '>' operator
+      // needs a ::number cast or the API returns HTTP 400 type-mismatch.
       final uri = Uri.parse(
         'https://data.transportation.gov/resource/vhwz-raag.json'
-        '?\$where=latitude>${latMin.toStringAsFixed(6)}'
-        ' AND latitude<${latMax.toStringAsFixed(6)}'
-        ' AND longitude>${lngMin.toStringAsFixed(6)}'
-        ' AND longitude<${lngMax.toStringAsFixed(6)}'
+        '?\$where=latitude::number>${latMin.toStringAsFixed(6)}'
+        ' AND latitude::number<${latMax.toStringAsFixed(6)}'
+        ' AND longitude::number>${lngMin.toStringAsFixed(6)}'
+        ' AND longitude::number<${lngMax.toStringAsFixed(6)}'
         '&\$limit=10000',
       );
 

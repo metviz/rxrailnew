@@ -2906,12 +2906,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     final appToken = dotenv.maybeGet('SOCRATA_APP_TOKEN') ?? '';
 
+    // latitude/longitude are *text* columns in Socrata, so the '>' operator
+    // needs a ::number cast or the API returns HTTP 400 type-mismatch.
     final uri = Uri.parse(
       'https://data.transportation.gov/resource/vhwz-raag.json'
-      '?\$where=latitude>${latMin.toStringAsFixed(6)}'
-      ' AND latitude<${latMax.toStringAsFixed(6)}'
-      ' AND longitude>${lngMin.toStringAsFixed(6)}'
-      ' AND longitude<${lngMax.toStringAsFixed(6)}'
+      '?\$where=latitude::number>${latMin.toStringAsFixed(6)}'
+      ' AND latitude::number<${latMax.toStringAsFixed(6)}'
+      ' AND longitude::number>${lngMin.toStringAsFixed(6)}'
+      ' AND longitude::number<${lngMax.toStringAsFixed(6)}'
       '&\$limit=10000',
     );
 

@@ -107,6 +107,15 @@ Future<bool> _patchOfflineTiles() async {
   }
 }
 
+/// One search hit from Nominatim — enough to show in a dropdown and to
+/// drive routing without a second reverse-geocode round trip.
+class GeocodeResult {
+  final double lat;
+  final double lng;
+  final String displayName;
+  const GeocodeResult(this.lat, this.lng, this.displayName);
+}
+
 class CrossingController extends GetxController with WidgetsBindingObserver {
   final SettingController settingController = Get.find<SettingController>();
   final player = AudioPlayer();
@@ -3053,6 +3062,45 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //     throw e;
   //   }
   // }
+  /// Nominatim (OpenStreetMap) autocomplete/geocoder — replaces the native
+  /// Android Geocoder (`locationFromAddress`) which was returning empty on
+  /// partial queries and silently failing on full ones. Nominatim's TOS
+  /// requires a descriptive User-Agent and caps at ~1 req/sec.
+  Future<List<GeocodeResult>> _geocodeViaNominatim(String query,
+      {int limit = 5}) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return [];
+    try {
+      final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+        'q': trimmed,
+        'format': 'json',
+        'limit': '$limit',
+        'addressdetails': '0',
+        'countrycodes': 'us',
+      });
+      final res = await http.get(uri, headers: {
+        'User-Agent': 'RXrail/1.0 (railway crossing alert app)',
+        'Accept-Language': 'en',
+      }).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) {
+        log_print.log('❌ Nominatim ${res.statusCode}');
+        return [];
+      }
+      final data = jsonDecode(res.body) as List<dynamic>;
+      return data.map<GeocodeResult>((e) {
+        final m = e as Map<String, dynamic>;
+        return GeocodeResult(
+          double.tryParse(m['lat']?.toString() ?? '') ?? 0.0,
+          double.tryParse(m['lon']?.toString() ?? '') ?? 0.0,
+          m['display_name']?.toString() ?? '',
+        );
+      }).toList();
+    } catch (e) {
+      log_print.log('❌ Nominatim error: $e');
+      return [];
+    }
+  }
+
   Future<void> findRoute(String toAddress) async {
     try {
       routeCoordinates.clear();
@@ -3072,18 +3120,17 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         timestamp: DateTime.now(),
       );
 
-      final toLocations = await geocoding.locationFromAddress(toAddress);
-      if (toLocations.isEmpty) {
+      final results = await _geocodeViaNominatim(toAddress, limit: 1);
+      if (results.isEmpty) {
         throw Exception("Could not find destination address");
       }
+      final toLoc = results.first;
       destinationGeocoded =
-          'Destination geocoded to: ${toLocations.first.latitude}, ${toLocations.first.longitude}';
+          'Destination geocoded to: ${toLoc.lat}, ${toLoc.lng}';
       log_print.log(destinationGeocoded);
 
-      final toLoc = toLocations.first;
-
       fromLocation.value = LatLng(fromLoc.latitude, fromLoc.longitude);
-      toLocation.value = LatLng(toLoc.latitude, toLoc.longitude);
+      toLocation.value = LatLng(toLoc.lat, toLoc.lng);
       destinationAddress.value = toAddress;
       await _savePreferences();
 
@@ -5968,8 +6015,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     final toController = TextEditingController(text: destinationAddress.value);
     final RxBool isLoading = false.obs;
-    final RxList<place_mark.Location> locationSuggestions =
-        <place_mark.Location>[].obs;
+    final RxList<GeocodeResult> locationSuggestions = <GeocodeResult>[].obs;
     final RxString currentLocationText = 'Getting location...'.obs;
 
     // Controllers for home/work dialogs
@@ -5995,12 +6041,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         showDestinationWarning.value = false;
       }
 
-      try {
-        final locations = await place_mark.locationFromAddress(query);
-        locationSuggestions.assignAll(locations);
-      } catch (e) {
-        locationSuggestions.clear();
-      }
+      final results = await _geocodeViaNominatim(query);
+      locationSuggestions.assignAll(results);
     }
 
     Future<void> refreshCurrentLocationInSheet() async {
@@ -6626,40 +6668,24 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
                                       shrinkWrap: true,
                                       itemCount: locationSuggestions.length,
                                       itemBuilder: (context, index) {
-                                        final location =
+                                        final result =
                                             locationSuggestions[index];
-                                        return FutureBuilder<
-                                          List<geocoding.Placemark>
-                                        >(
-                                          future: geocoding
-                                              .placemarkFromCoordinates(
-                                                location.latitude,
-                                                location.longitude,
-                                              ),
-                                          builder: (context, snapshot) {
-                                            if (!snapshot.hasData)
-                                              return SizedBox();
-                                            final placeMark =
-                                                snapshot.data!.first;
-                                            final address =
-                                                "${placeMark.street ?? ''}, ${placeMark.locality ?? ''}, ${placeMark.administrativeArea ?? ''}";
-                                            return ListTile(
-                                              leading: Icon(
-                                                Icons.location_on,
-                                                color: Color(0xFFFFC107),
-                                              ),
-                                              title: Text(
-                                                address,
-                                                style: styleW500(size: 12.sp),
-                                              ),
-                                              onTap: () {
-                                                toController.text = address;
-                                                locationSuggestions.clear();
-                                                FocusScope.of(
-                                                  context,
-                                                ).unfocus();
-                                              },
-                                            );
+                                        return ListTile(
+                                          leading: Icon(
+                                            Icons.location_on,
+                                            color: Color(0xFFFFC107),
+                                          ),
+                                          title: Text(
+                                            result.displayName,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: styleW500(size: 12.sp),
+                                          ),
+                                          onTap: () {
+                                            toController.text =
+                                                result.displayName;
+                                            locationSuggestions.clear();
+                                            FocusScope.of(context).unfocus();
                                           },
                                         );
                                       },

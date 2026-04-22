@@ -748,7 +748,13 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       _downloadSubscription = progressStream.listen(
         (DownloadProgress prog) {
           _lastStreamUpdate = DateTime.now();
-          downloadedTiles.value = prog.successfulTiles;
+          // prog.successfulTiles counts only tiles fetched over the network.
+          // With skipExistingTiles: true, already-cached hits land in
+          // prog.cachedTiles — the UI counter must sum both, otherwise a
+          // Resume-as-top-up pass looks like it is starting from zero even
+          // though FMTC is skipping thousands of cached tiles per second.
+          final processed = prog.successfulTiles + prog.cachedTiles;
+          downloadedTiles.value = processed;
           totalTiles.value = prog.maxTiles;
 
           final percent = prog.percentageProgress;
@@ -758,7 +764,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
             log_print.log(
               "📥 ${DateTime.now().toString().split(' ')[1]} - "
               "${percent.toStringAsFixed(1)}% - "
-              "${prog.successfulTiles}/${prog.maxTiles} tiles - "
+              "$processed/${prog.maxTiles} tiles "
+              "(net:${prog.successfulTiles} cache:${prog.cachedTiles}) - "
               "Background: $_isAppInBackground",
             );
           }

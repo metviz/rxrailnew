@@ -32,6 +32,16 @@ class SettingController extends GetxController {
     _checkLocationPermissionStatus();
   }
 
+  @override
+  void onReady() {
+    super.onReady();
+    // Refresh offline-map flags (hasOfflineMap / hasPartialDownload) from
+    // SharedPreferences each time the Settings page opens so Resume /
+    // Re-download buttons always reflect the actual on-disk state — not
+    // a stale RxBool left over from a prior CrossingController init.
+    crossingController.checkOfflineMapAvailability();
+  }
+
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     isWarningsEnabled.value = prefs.getBool('isWarningsEnabled') ?? true;

@@ -2904,7 +2904,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     final double lngMin = pos.longitude - delta;
     final double lngMax = pos.longitude + delta;
 
-    final appToken = dotenv.maybeGet('SOCRATA_APP_TOKEN') ?? '';
+    // `.env` is not bundled as a Flutter asset so dotenv may never initialize
+    // on device builds. maybeGet() still throws NotInitializedError on an
+    // uninitialized dotenv — guard with isInitialized.
+    final appToken = dotenv.isInitialized
+        ? (dotenv.maybeGet('SOCRATA_APP_TOKEN') ?? '')
+        : '';
 
     // latitude/longitude are *text* columns in Socrata, so the '>' operator
     // needs a ::number cast or the API returns HTTP 400 type-mismatch.

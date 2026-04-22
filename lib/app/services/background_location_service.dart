@@ -492,12 +492,18 @@ class LocationTaskHandler extends TaskHandler {
       final lngMin = position.longitude - delta;
       final lngMax = position.longitude + delta;
 
-      // Uri.parse avoids Uri.https() percent-encoding '$' → '%24'.
-      // latitude/longitude are *text* columns in Socrata, so the '>' operator
-      // needs a ::number cast or the API returns HTTP 400 type-mismatch.
+      // Uri.parse avoids Uri.https() percent-encoding '$' → '%24'. Latitude
+      // and longitude are stored as text in Socrata, so '>' needs a
+      // ::number cast. A handful of rows have a '°' suffix (e.g.
+      // "29.303213°") which breaks the cast for the *entire* query — filter
+      // them out first with NOT LIKE. In the URL, '%' (SoQL LIKE wildcard)
+      // must be encoded as %25 and '°' as %C2%B0, otherwise Uri.parse
+      // interprets '%' as the start of a percent-escape.
       final uri = Uri.parse(
         'https://data.transportation.gov/resource/vhwz-raag.json'
-        '?\$where=latitude::number>${latMin.toStringAsFixed(6)}'
+        "?\$where=latitude NOT LIKE '%25%C2%B0%25'"
+        " AND longitude NOT LIKE '%25%C2%B0%25'"
+        ' AND latitude::number>${latMin.toStringAsFixed(6)}'
         ' AND latitude::number<${latMax.toStringAsFixed(6)}'
         ' AND longitude::number>${lngMin.toStringAsFixed(6)}'
         ' AND longitude::number<${lngMax.toStringAsFixed(6)}'

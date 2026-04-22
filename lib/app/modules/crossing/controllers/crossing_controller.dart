@@ -4375,7 +4375,10 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         '?overview=full&steps=true&geometries=polyline',
       );
 
-      final response = await http.get(url);
+      // OSRM's public demo server is occasionally slow; without a timeout the
+      // caller's spinner would hang indefinitely.
+      final response =
+          await http.get(url).timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) {
         throw Exception("Failed to get route: ${response.statusCode}");
       }

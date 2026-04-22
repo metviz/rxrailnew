@@ -461,23 +461,22 @@ class LocationTaskHandler extends TaskHandler {
       final lngMin = position.longitude - delta;
       final lngMax = position.longitude + delta;
 
-      // Use Uri constructor so query parameters are properly encoded
-      final uri = Uri.https(
-        'data.transportation.gov',
-        '/resource/vhwz-raag.json',
-        {
-          '\$where': 'latitude>${latMin.toStringAsFixed(6)}'
-              ' AND latitude<${latMax.toStringAsFixed(6)}'
-              ' AND longitude>${lngMin.toStringAsFixed(6)}'
-              ' AND longitude<${lngMax.toStringAsFixed(6)}',
-          '\$limit': '10000',
-        },
+      // Use Uri.parse with a raw URL so Socrata's $where / $limit params are
+      // NOT percent-encoded (Uri.https() encodes '$' → '%24', causing 400).
+      final uri = Uri.parse(
+        'https://data.transportation.gov/resource/vhwz-raag.json'
+        '?\$where=latitude>${latMin.toStringAsFixed(6)}'
+        ' AND latitude<${latMax.toStringAsFixed(6)}'
+        ' AND longitude>${lngMin.toStringAsFixed(6)}'
+        ' AND longitude<${lngMax.toStringAsFixed(6)}'
+        '&\$limit=10000',
       );
 
       final res = await http.get(uri).timeout(const Duration(seconds: 15));
       if (res.statusCode != 200) {
         await TestLogger.log(
-            '[BG] FRA fetch failed: ${res.statusCode}', tag: 'BG');
+            '[BG] FRA fetch failed: ${res.statusCode} — ${res.body.length > 200 ? res.body.substring(0, 200) : res.body}',
+            tag: 'BG');
         return [];
       }
 

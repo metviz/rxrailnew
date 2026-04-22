@@ -351,14 +351,22 @@ class SettingView extends GetView<SettingController> {
                       borderRadius: BorderRadius.circular(20.r),
                       onTap: () async {
                         await cc.downloadOfflineMapByCurrentState();
-                        await cc.checkOfflineMapAvailability();
                       },
-                      child: Text(
-                        "Restart",
-                        style: TextStyle(
-                          fontSize: 12.sp,
-                          color: Colors.grey[500],
-                          decoration: TextDecoration.underline,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 16.w, vertical: 8.h),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[50],
+                          borderRadius: BorderRadius.circular(20.r),
+                          border: Border.all(color: Colors.orange.shade300),
+                        ),
+                        child: Text(
+                          "Re-download",
+                          style: TextStyle(
+                            fontSize: 14.sp,
+                            color: Colors.orange[700],
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -369,7 +377,6 @@ class SettingView extends GetView<SettingController> {
                   borderRadius: BorderRadius.circular(20.r),
                   onTap: () async {
                     await cc.downloadOfflineMapByCurrentState();
-                    await cc.checkOfflineMapAvailability();
                   },
                   child: AnimatedContainer(
                     duration: Duration(milliseconds: 200),

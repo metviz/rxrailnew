@@ -2928,18 +2928,32 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         : '';
 
     // latitude/longitude are text columns in Socrata; '>' needs a ::number
-    // cast. A handful of rows have a '°' suffix (e.g. "29.303213°") that
-    // breaks the cast for the entire query, so filter those first.
-    // URL-encoding note: '%' (SoQL LIKE wildcard) → %25, '°' → %C2%B0.
+    // cast. The dataset has malformed rows with stray characters (°, O, o)
+    // that break the cast for the entire query, so filter those first via
+    // chained NOT LIKE. URL-encoding: '%' → %25, '°' → %C2%B0.
+    // Server-side `crossingposition='At Grade'` plus $select on 5 cols
+    // shave the response from ~3 MB to ~76 KB. $limit=1000 stays within
+    // Socrata's ~1024-row hard cap (beyond which the connection drops
+    // mid-stream, surfacing as FormatException on jsonDecode).
     final uri = Uri.parse(
       'https://data.transportation.gov/resource/vhwz-raag.json'
-      "?\$where=latitude NOT LIKE '%25%C2%B0%25'"
+      '?\$select=crossingid,latitude,longitude,street,revisiondate'
+      "&\$where=crossingposition='At Grade'"
+      " AND latitude NOT LIKE '%25%C2%B0%25'"
+      " AND latitude NOT LIKE '%25O%25'"
+      " AND latitude NOT LIKE '%25o%25'"
       " AND longitude NOT LIKE '%25%C2%B0%25'"
+      " AND longitude NOT LIKE '%25O%25'"
+      " AND longitude NOT LIKE '%25o%25'"
       ' AND latitude::number>${latMin.toStringAsFixed(6)}'
       ' AND latitude::number<${latMax.toStringAsFixed(6)}'
       ' AND longitude::number>${lngMin.toStringAsFixed(6)}'
       ' AND longitude::number<${lngMax.toStringAsFixed(6)}'
-      '&\$limit=10000',
+      // Socrata reliably caps response at ~1024 rows regardless of $limit
+      // and drops the connection mid-row beyond that, causing
+      // FormatException on jsonDecode. Cap at 1000 — a 25 km bbox has
+      // well under that many at-grade crossings for any US region.
+      '&\$limit=1000',
     );
 
     try {
@@ -2955,8 +2969,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
         for (final e in data) {
           if (e['latitude'] == null || e['longitude'] == null) continue;
-          if ((e['crossingposition'] ?? '').toString().trim().toLowerCase() !=
-              'at grade') continue;
+          // crossingposition='At Grade' is now filtered server-side via
+          // $where, so no client-side filter is needed here.
 
           // Deduplicate by crossingid (authoritative FRA key)
           final id = (e['crossingid'] as String? ?? '').trim();

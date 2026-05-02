@@ -6051,7 +6051,16 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     final RxString destinationWarningText =
         'Please enter a more specific address (min 5 characters)'.obs;
 
+    // Debounce timer + token to throttle Nominatim requests. Without this,
+    // typing a 15-char address fires ~12 requests in 3 s and Nominatim's
+    // 1 req/sec TOS bans the device IP with HTTP 429 for ~1 hour, killing
+    // autocomplete entirely.
+    Timer? suggestDebounce;
+    int suggestSeq = 0;
+
     Future<void> updateLocationSuggestions(String query) async {
+      suggestDebounce?.cancel();
+
       if (query.isEmpty) {
         locationSuggestions.clear();
         showDestinationWarning.value = true;
@@ -6065,8 +6074,13 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         showDestinationWarning.value = false;
       }
 
-      final results = await _geocodeViaNominatim(query);
-      locationSuggestions.assignAll(results);
+      final mySeq = ++suggestSeq;
+      suggestDebounce = Timer(const Duration(milliseconds: 400), () async {
+        final results = await _geocodeViaNominatim(query);
+        // Discard stale results if the user kept typing past this request.
+        if (mySeq != suggestSeq) return;
+        locationSuggestions.assignAll(results);
+      });
     }
 
     Future<void> refreshCurrentLocationInSheet() async {

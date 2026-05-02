@@ -412,6 +412,12 @@ class LocationTaskHandler extends TaskHandler {
 
       final double threshold = settings.distanceMeters;
       final Set<String> stillNear = {};
+      // Track the closest crossing this tick so the summary line tells us
+      // whether the user was anywhere near one — silent "checked N" logs
+      // were hiding the answer to "did the user actually pass a crossing?".
+      double nearestDist = double.infinity;
+      String nearestId = '';
+      String nearestStreet = '';
 
       for (final crossing in crossings) {
         final id = crossing['crossingid'] as String? ?? '';
@@ -425,6 +431,12 @@ class LocationTaskHandler extends TaskHandler {
         final distance = _haversineDistanceMeters(
           position.latitude, position.longitude, lat, lng,
         );
+
+        if (distance < nearestDist) {
+          nearestDist = distance;
+          nearestId = id;
+          nearestStreet = street;
+        }
 
         if (distance <= threshold * 2) stillNear.add(id);
 
@@ -441,7 +453,18 @@ class LocationTaskHandler extends TaskHandler {
               final notifId =
                   await _showCrossingAlert(_notifPlugin, id, street, distance);
               _activeNotifIds[id] = notifId;
+            } else {
+              await TestLogger.log(
+                '[$source] ⚠️ alert SUPPRESSED: _notifInitialized=false',
+                tag: 'BG',
+              );
             }
+          } else {
+            await TestLogger.log(
+              '[$source] 🔕 alert capped (${_maxAlertsPerVisit}/visit) — $street '
+              '${distance.round()}m',
+              tag: 'BG',
+            );
           }
         }
       }
@@ -458,12 +481,17 @@ class LocationTaskHandler extends TaskHandler {
         _alertCount.remove(id);
       }
 
+      final nearestText = nearestDist.isFinite
+          ? 'nearest=${nearestDist.round()}m ($nearestId $nearestStreet)'
+          : 'nearest=∞';
       await TestLogger.log(
         '[$source] checked ${crossings.length} crossings '
         'threshold=${threshold.round()}m '
+        '$nearestText '
         'pos=${position.latitude.toStringAsFixed(5)},${position.longitude.toStringAsFixed(5)} '
         'acc=${position.accuracy.round()}m '
-        'spd=${position.speed.toStringAsFixed(1)}m/s',
+        'spd=${position.speed.toStringAsFixed(1)}m/s '
+        'notifInit=$_notifInitialized',
         tag: 'BG',
       );
     } catch (e) {

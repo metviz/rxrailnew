@@ -8039,6 +8039,19 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           // Save for background
           _saveLocationToPrefs();
 
+          // Keep the user marker on screen while driving — recenter on every
+          // GPS fix unless the user has manually zoomed/panned. Previously
+          // this only ran inside `if (isNavigating.value)`, so the cursor
+          // drifted off-screen whenever no Find Route was active.
+          if (!hasUserAdjustedZoom.value) {
+            isProgrammaticMove.value = true;
+            mapController.move(
+              LatLng(position.latitude, position.longitude),
+              currentZoom.value,
+            );
+            isProgrammaticMove.value = false;
+          }
+
           // ✅✅✅ MOST IMPORTANT: CHECK CROSSINGS
           log_print.log('🔍 CALLING checkNearbyCrossings()...');
           checkNearbyCrossings();
@@ -8046,15 +8059,6 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           // Navigation updates
           if (isNavigating.value) {
             log_print.log('🚗 Navigation mode active');
-
-            if (!hasUserAdjustedZoom.value) {
-              isProgrammaticMove.value = true;
-              mapController.move(
-                LatLng(position.latitude, position.longitude),
-                18,
-              );
-              isProgrammaticMove.value = false;
-            }
 
             _updateRouteProgress();
             _checkProximityToCrossings();

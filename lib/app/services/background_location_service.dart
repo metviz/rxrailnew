@@ -438,7 +438,10 @@ class LocationTaskHandler extends TaskHandler {
           nearestStreet = street;
         }
 
-        if (distance <= threshold * 2) stillNear.add(id);
+        // Hysteresis: keep the notification alive until the user is past
+        // 1.2x the alert threshold. 2x kept the alert lingering ~30 s past
+        // the crossing at highway speed; 1.2x clears it within ~5 s.
+        if (distance <= threshold * 1.2) stillNear.add(id);
 
         if (distance <= threshold) {
           final count = _alertCount[id] ?? 0;

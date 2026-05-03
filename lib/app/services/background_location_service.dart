@@ -270,7 +270,14 @@ class LocationTaskHandler extends TaskHandler {
 
   final Map<String, int> _alertCount = {};
   final Map<String, int> _activeNotifIds = {};
-  static const int _maxAlertsPerVisit = 2;
+  // One audible alert per crossing approach. With 2, the GPS path and
+  // the 5-s timer fire the second alert ~2 s after the first; Android
+  // suppresses sound on rapid repeats to the same channel, so the
+  // second alert lands silently in the shade and the user hears only
+  // the first. Departure hysteresis resets the count when the user
+  // moves past threshold*1.2, so re-passing the same crossing later
+  // re-arms the alert.
+  static const int _maxAlertsPerVisit = 1;
 
   final FlutterLocalNotificationsPlugin _notifPlugin =
       FlutterLocalNotificationsPlugin();

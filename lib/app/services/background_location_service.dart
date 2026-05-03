@@ -618,9 +618,26 @@ class LocationTaskHandler extends TaskHandler {
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
-    await TestLogger.log('🛑 Location tracking stopped', tag: 'BG');
+    await TestLogger.log(
+      '🛑 Location tracking stopped (isTimeout=$isTimeout)',
+      tag: 'BG',
+    );
     await _positionStream?.cancel();
     _positionStream = null;
+
+    // Mark "service should auto-restart on next opportunity" so the MAIN
+    // isolate's BackgroundLocationService.onInit detects it via the
+    // existing _isServiceRunningKey check and re-starts the service the
+    // next time the app boots. Without this, an Android-killed service
+    // stays dead until the user manually re-toggles tracking — which is
+    // exactly what we saw in field tests (no alerts after the service
+    // died mid-drive).
+    try {
+      // Mirror BackgroundLocationService._isServiceRunningKey — string
+      // literal because that field is private to the MAIN-isolate class.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_service_running', true);
+    } catch (_) {}
   }
 
   @override

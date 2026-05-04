@@ -768,7 +768,13 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           // Resume-as-top-up pass looks like it is starting from zero even
           // though FMTC is skipping thousands of cached tiles per second.
           final processed = prog.successfulTiles + prog.cachedTiles;
-          downloadedTiles.value = processed;
+          // Only allow the count to climb. The stream's first events arrive
+          // with processed=0 — for a top-up resume we've already seeded
+          // downloadedTiles to the cached count, and overwriting with 0
+          // makes the UI flash "starting from 0" before climbing back.
+          if (processed > downloadedTiles.value) {
+            downloadedTiles.value = processed;
+          }
           totalTiles.value = prog.maxTiles;
 
           final percent = prog.percentageProgress;

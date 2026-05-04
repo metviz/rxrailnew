@@ -272,13 +272,21 @@ class SettingView extends GetView<SettingController> {
                           Flexible(
                             child: Text(
                               () {
-                                final st = cc.offlineMapStateCode.value;
-                                final n = cc.cachedTileCount.value;
-                                final stPart =
-                                    st.isNotEmpty ? ' · $st' : '';
-                                final nPart =
-                                    n > 0 ? ' · $n tiles' : '';
-                                return 'Map downloaded$stPart$nPart';
+                                final all = cc.downloadedStates;
+                                if (all.isEmpty) {
+                                  // fallback while initial scan is still running
+                                  final st = cc.offlineMapStateCode.value;
+                                  final n = cc.cachedTileCount.value;
+                                  final stPart =
+                                      st.isNotEmpty ? ' · $st' : '';
+                                  final nPart =
+                                      n > 0 ? ' · $n tiles' : '';
+                                  return 'Map downloaded$stPart$nPart';
+                                }
+                                final summary = all
+                                    .map((s) => '${s.code} (${s.tiles})')
+                                    .join(', ');
+                                return 'Map downloaded · $summary';
                               }(),
                               style: TextStyle(
                                 fontSize: 12.sp,

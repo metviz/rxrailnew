@@ -1322,6 +1322,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   // show "Map downloaded · NC · 8500 tiles".
   final RxInt cachedTileCount = 0.obs;
   final RxString offlineMapStateCode = ''.obs;
+  // Every state with a non-empty FMTC store. Populated by
+  // checkOfflineMapAvailability() so Settings can show all downloads,
+  // not just the one matching the user's current bounding-box.
+  // Each entry: (state code, tile count).
+  final RxList<({String code, int tiles})> downloadedStates =
+      <({String code, int tiles})>[].obs;
   final Rxn<DateTime> offlineMapLastUpdated = Rxn<DateTime>();
   StreamSubscription<DownloadProgress>? _downloadSubscription;
   bool _downloadCancelledIntentionally = false;
@@ -1397,6 +1403,19 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     await fg.FlutterForegroundTask.stopService();
   }
 
+  // 50 US states + DC — kept in sync with getCurrentStateCode()'s
+  // stateBounds map. Iterated each time the Settings panel refreshes so
+  // the UI can list every state that has cached tiles, not just the one
+  // matching the user's current bounding-box.
+  static const List<String> _allStateCodes = [
+    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY',
+    'DC',
+  ];
+
   // Check on init
   Future<void> checkOfflineMapAvailability() async {
     hasOfflineMap.value = await isOfflineMapAvailable();
@@ -1422,6 +1441,25 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     } catch (_) {
       // leave previous values intact on transient errors
     }
+    // Discover every state with tiles cached so the Settings UI can show
+    // all downloads (e.g. user downloaded NC + NY + VA — caption should
+    // list all three even when standing in one of them).
+    try {
+      final found = <({String code, int tiles})>[];
+      for (final code in _allStateCodes) {
+        try {
+          final store = FMTCStore('offline_tiles_$code');
+          if (await store.manage.ready) {
+            final n = (await store.stats.all).length;
+            if (n > 0) found.add((code: code, tiles: n));
+          }
+        } catch (_) {}
+      }
+      downloadedStates.assignAll(found);
+      // hasOfflineMap mirrors "anything available", regardless of which
+      // state the user is currently standing in.
+      if (found.isNotEmpty) hasOfflineMap.value = true;
+    } catch (_) {}
     // Detect partial (cancelled) download — store exists but never completed.
     final partialState = prefs.getString('offline_map_partial_state');
     if (partialState != null) {

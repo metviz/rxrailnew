@@ -406,10 +406,34 @@ class LocationTaskHandler extends TaskHandler {
       final settings = await CrossingCacheService.loadWarningSettings();
       if (!settings.enabled) return;
 
-      // 4. Load crossings — fetch from FRA if cache is empty
+      // 4. Load crossings — fetch from FRA if cache is empty OR if the
+      // user has driven far from the centre of the last bbox fetch.
+      // Without this, a 25 km drive (Apex → Raleigh) leaves the user in
+      // an area whose crossings were never cached, and no alert fires
+      // even when right next to a tracked crossing.
       List<Map<String, dynamic>> crossings =
           await CrossingCacheService.loadCrossings();
-      if (crossings.isEmpty) {
+      bool forceRefetch = false;
+      final prefs = await SharedPreferences.getInstance();
+      final lastLat = prefs.getDouble('bg_last_fetch_lat');
+      final lastLng = prefs.getDouble('bg_last_fetch_lng');
+      if (lastLat != null && lastLng != null) {
+        final drift = _haversineDistanceMeters(
+            position.latitude, position.longitude, lastLat, lastLng);
+        // 15 km — leaves ~10 km of bbox slack so the user can keep moving
+        // for a few more minutes before the next refetch is needed. This
+        // also overrides the 30-minute throttle when the user has driven
+        // out of coverage, so they don't drive a whole half-hour with the
+        // wrong crossing set loaded.
+        if (drift > 15000) {
+          await TestLogger.log(
+              '[$source] cache drift ${(drift / 1000).toStringAsFixed(1)} km — refetching',
+              tag: 'BG');
+          forceRefetch = true;
+          _lastFraFetch = null; // bypass 30-min throttle
+        }
+      }
+      if (crossings.isEmpty || forceRefetch) {
         crossings = await _fetchAndCacheCrossings(position);
         if (crossings.isEmpty) {
           await TestLogger.log('[$source] no cached crossings', tag: 'BG');
@@ -523,6 +547,10 @@ class LocationTaskHandler extends TaskHandler {
     _lastFraFetch = now;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kLastFraFetchKey, now.toIso8601String());
+    // Record fetch center so _checkProximity can detect "user has driven
+    // out of the last cached bbox" and trigger a refetch.
+    await prefs.setDouble('bg_last_fetch_lat', position.latitude);
+    await prefs.setDouble('bg_last_fetch_lng', position.longitude);
     try {
       const double delta = 0.225; // ~25 km
       final latMin = position.latitude - delta;

@@ -775,6 +775,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           // with processed=0 — for a top-up resume we've already seeded
           // downloadedTiles to the cached count, and overwriting with 0
           // makes the UI flash "starting from 0" before climbing back.
+          // Surface the live in-stream count separately so the UI can show
+          // "Verifying X / N cached tiles" while the seeded counter sits
+          // frozen at the baseline cache size.
+          streamProcessedTiles.value = processed;
+          isVerifyingCache.value = processed < downloadedTiles.value;
+
           if (processed > downloadedTiles.value) {
             downloadedTiles.value = processed;
           }
@@ -916,6 +922,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     isDownloadingOfflineMap.value = false;
     _currentDownloadingState = null;
+    isVerifyingCache.value = false;
+    streamProcessedTiles.value = 0;
 
     // Disable wake lock
     await WakelockPlus.disable();
@@ -1338,6 +1346,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   // show "Map downloaded · NC · 8500 tiles".
   final RxInt cachedTileCount = 0.obs;
   final RxString offlineMapStateCode = ''.obs;
+  // Live FMTC stream cumulative counts (only meaningful during a download).
+  // Used so the UI can show "Verifying 12345 / 77815 cached tiles" while
+  // the seeded counter sits frozen at 77815 waiting for the stream to
+  // catch up to the baseline.
+  final RxInt streamProcessedTiles = 0.obs;
+  final RxBool isVerifyingCache = false.obs;
   // Every state with a non-empty FMTC store. Populated by
   // checkOfflineMapAvailability() so Settings can show all downloads,
   // not just the one matching the user's current bounding-box.

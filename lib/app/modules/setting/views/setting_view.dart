@@ -467,6 +467,38 @@ class SettingView extends GetView<SettingController> {
                     AlwaysStoppedAnimation<Color>(Color(0xFFFFC107)),
               ),
             ),
+            // Show what FMTC is actually doing under the hood when the
+            // top-up resume is still verifying cached tiles. Otherwise the
+            // counter looks stuck at the seeded value for tens of seconds
+            // while the stream silently iterates 77k cache hits.
+            if (cc.isVerifyingCache.value)
+              Padding(
+                padding: EdgeInsets.only(top: 6.h),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 12.w,
+                      height: 12.w,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Colors.blue),
+                      ),
+                    ),
+                    SizedBox(width: 6.w),
+                    Flexible(
+                      child: Text(
+                        "Verifying ${cc.streamProcessedTiles.value} / $downloaded cached tiles…",
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          color: Colors.blue[700],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ],
       );

@@ -222,87 +222,96 @@ class SettingView extends GetView<SettingController> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row: label + action button
-          Row(
+          // Title + status caption (full width — buttons live in their own
+          // row below so the label never gets squeezed)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Download Offline Map",
-                      style: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black,
+              Text(
+                "Download Offline Map",
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black,
+                ),
+              ),
+              if (hasPartial && !isDownloading && !hasMap)
+                Padding(
+                  padding: EdgeInsets.only(top: 2.h),
+                  child: Row(
+                    children: [
+                      Icon(Icons.pause_circle_outline,
+                          color: Colors.blue, size: 13.sp),
+                      SizedBox(width: 4.w),
+                      Flexible(
+                        child: Text(
+                          partialTotal > 0
+                              ? "Paused — $partialDownloaded / $partialTotal tiles"
+                              : "Download paused",
+                          style: TextStyle(
+                            fontSize: 12.sp,
+                            color: Colors.blue[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
-                    ),
-                    if (hasPartial && !isDownloading && !hasMap)
-                      Padding(
-                        padding: EdgeInsets.only(top: 2.h),
-                        child: Row(
-                          children: [
-                            Icon(Icons.pause_circle_outline,
-                                color: Colors.blue, size: 13.sp),
-                            SizedBox(width: 4.w),
-                            Text(
-                              partialTotal > 0
-                                  ? "Paused — $partialDownloaded / $partialTotal tiles"
-                                  : "Download paused",
+                    ],
+                  ),
+                )
+              else if (hasMap && !isDownloading)
+                Padding(
+                  padding: EdgeInsets.only(top: 2.h),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.check_circle,
+                              color: Colors.green, size: 13.sp),
+                          SizedBox(width: 4.w),
+                          Flexible(
+                            child: Text(
+                              () {
+                                final st = cc.offlineMapStateCode.value;
+                                final n = cc.cachedTileCount.value;
+                                final stPart =
+                                    st.isNotEmpty ? ' · $st' : '';
+                                final nPart =
+                                    n > 0 ? ' · $n tiles' : '';
+                                return 'Map downloaded$stPart$nPart';
+                              }(),
                               style: TextStyle(
                                 fontSize: 12.sp,
-                                color: Colors.blue[700],
+                                color: Colors.green[700],
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                          ],
-                        ),
-                      )
-                    else if (hasMap && !isDownloading)
-                      Padding(
-                        padding: EdgeInsets.only(top: 2.h),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.check_circle,
-                                    color: Colors.green, size: 13.sp),
-                                SizedBox(width: 4.w),
-                                Text(
-                                  () {
-                                    final st = cc.offlineMapStateCode.value;
-                                    final n = cc.cachedTileCount.value;
-                                    final stPart = st.isNotEmpty ? ' · $st' : '';
-                                    final nPart = n > 0 ? ' · $n tiles' : '';
-                                    return 'Map downloaded$stPart$nPart';
-                                  }(),
-                                  style: TextStyle(
-                                    fontSize: 12.sp,
-                                    color: Colors.green[700],
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (cc.offlineMapLastUpdated.value != null)
-                              Padding(
-                                padding: EdgeInsets.only(top: 2.h),
-                                child: Text(
-                                  "Last updated: ${_formatMapDate(cc.offlineMapLastUpdated.value!)}",
-                                  style: TextStyle(
-                                    fontSize: 11.sp,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                  ],
+                      if (cc.offlineMapLastUpdated.value != null)
+                        Padding(
+                          padding: EdgeInsets.only(top: 2.h),
+                          child: Text(
+                            "Last updated: ${_formatMapDate(cc.offlineMapLastUpdated.value!)}",
+                            style: TextStyle(
+                              fontSize: 11.sp,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              SizedBox(width: 8.w),
+            ],
+          ),
+          SizedBox(height: 12.h),
+          // Action buttons (right-aligned, wrap to next line on narrow screens)
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8.w,
+            runSpacing: 8.h,
+            children: [
               if (isDownloading)
                 InkWell(
                   borderRadius: BorderRadius.circular(20.r),
@@ -324,118 +333,59 @@ class SettingView extends GetView<SettingController> {
                       ),
                     ),
                   ),
-                )
-              else if (hasPartial)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    InkWell(
+                ),
+              // Resume button — applies to both partial-cancel resume and
+              // top-up-on-complete-map. Each button is a direct Wrap child so
+              // they reflow to a second line on narrow screens.
+              if (!isDownloading && (hasPartial || hasMap))
+                InkWell(
+                  borderRadius: BorderRadius.circular(20.r),
+                  onTap: () async {
+                    await cc.resumeOfflineMapDownload();
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: 16.w, vertical: 8.h),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
                       borderRadius: BorderRadius.circular(20.r),
-                      onTap: () async {
-                        await cc.resumeOfflineMapDownload();
-                      },
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 16.w, vertical: 8.h),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(20.r),
-                          border: Border.all(color: Colors.blue.shade300),
-                        ),
-                        child: Text(
-                          "Resume",
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            color: Colors.blue[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                      border: Border.all(color: Colors.blue.shade300),
+                    ),
+                    child: Text(
+                      "Resume",
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        color: Colors.blue[700],
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    SizedBox(width: 8.w),
-                    InkWell(
+                  ),
+                ),
+              if (!isDownloading && (hasPartial || hasMap))
+                InkWell(
+                  borderRadius: BorderRadius.circular(20.r),
+                  onTap: () async {
+                    await cc.downloadOfflineMapByCurrentState();
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: 16.w, vertical: 8.h),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
                       borderRadius: BorderRadius.circular(20.r),
-                      onTap: () async {
-                        await cc.downloadOfflineMapByCurrentState();
-                      },
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 16.w, vertical: 8.h),
-                        decoration: BoxDecoration(
-                          color: Colors.orange[50],
-                          borderRadius: BorderRadius.circular(20.r),
-                          border: Border.all(color: Colors.orange.shade300),
-                        ),
-                        child: Text(
-                          "Re-download",
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            color: Colors.orange[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                      border: Border.all(color: Colors.orange.shade300),
+                    ),
+                    child: Text(
+                      "Re-download",
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        color: Colors.orange[700],
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
-                )
-              else if (hasMap)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Resume here means "verify server against cache and
-                    // download any missing tiles" — FMTC's skipExistingTiles
-                    // makes this cheap, and resumeOfflineMapDownload() skips
-                    // the wipe-confirmation dialog.
-                    InkWell(
-                      borderRadius: BorderRadius.circular(20.r),
-                      onTap: () async {
-                        await cc.resumeOfflineMapDownload();
-                      },
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 16.w, vertical: 8.h),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(20.r),
-                          border: Border.all(color: Colors.blue.shade300),
-                        ),
-                        child: Text(
-                          "Resume",
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            color: Colors.blue[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 8.w),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(20.r),
-                      onTap: () async {
-                        await cc.downloadOfflineMapByCurrentState();
-                      },
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 16.w, vertical: 8.h),
-                        decoration: BoxDecoration(
-                          color: Colors.orange[50],
-                          borderRadius: BorderRadius.circular(20.r),
-                          border: Border.all(color: Colors.orange.shade300),
-                        ),
-                        child: Text(
-                          "Re-download",
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            color: Colors.orange[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              else
+                  ),
+                ),
+              if (!isDownloading && !hasPartial && !hasMap)
                 InkWell(
                   borderRadius: BorderRadius.circular(20.r),
                   onTap: () async {

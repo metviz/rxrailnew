@@ -778,9 +778,18 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           if (processed > downloadedTiles.value) {
             downloadedTiles.value = processed;
           }
-          totalTiles.value = prog.maxTiles;
+          if (prog.maxTiles > totalTiles.value) {
+            totalTiles.value = prog.maxTiles;
+          }
 
-          final percent = prog.percentageProgress;
+          // Compute percent from our seeded counters rather than
+          // prog.percentageProgress. FMTC's percentage is "tiles attempted
+          // this stream / maxTiles", which starts at 0 every Resume and
+          // would visually shrink from the seeded 91% back to 11% before
+          // climbing again.
+          final percent = totalTiles.value > 0
+              ? (downloadedTiles.value / totalTiles.value) * 100
+              : 0.0;
           if (percent.isFinite) {
             offlineMapDownloadProgress.value = percent;
 

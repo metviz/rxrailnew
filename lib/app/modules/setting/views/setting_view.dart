@@ -270,7 +270,13 @@ class SettingView extends GetView<SettingController> {
                                     color: Colors.green, size: 13.sp),
                                 SizedBox(width: 4.w),
                                 Text(
-                                  "Map downloaded",
+                                  () {
+                                    final st = cc.offlineMapStateCode.value;
+                                    final n = cc.cachedTileCount.value;
+                                    final stPart = st.isNotEmpty ? ' · $st' : '';
+                                    final nPart = n > 0 ? ' · $n tiles' : '';
+                                    return 'Map downloaded$stPart$nPart';
+                                  }(),
                                   style: TextStyle(
                                     fontSize: 12.sp,
                                     color: Colors.green[700],

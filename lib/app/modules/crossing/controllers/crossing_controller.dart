@@ -707,12 +707,26 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       isDownloadingOfflineMap.value = true;
       _currentDownloadingState = stateCode;
       if (resume) {
-        offlineMapDownloadProgress.value =
-            partialTotalTiles.value > 0
-                ? (partialDownloadedTiles.value / partialTotalTiles.value) * 100
-                : 0.0;
-        downloadedTiles.value = partialDownloadedTiles.value;
-        totalTiles.value = partialTotalTiles.value;
+        // Two flavours of resume share this branch:
+        //   (a) Genuine pause/resume — partialTotalTiles set on cancel
+        //   (b) Top-up of a fully-downloaded map — no partial marker, but
+        //       FMTC's store already has N cached tiles. Seed from
+        //       store.stats.length so the UI doesn't display "0/total"
+        //       while skipExistingTiles speed-runs through cache hits.
+        int seededDownloaded = partialDownloadedTiles.value;
+        int seededTotal = partialTotalTiles.value;
+        if (seededDownloaded == 0) {
+          try {
+            final cached = (await store.stats.all).length;
+            seededDownloaded = cached;
+            if (seededTotal == 0) seededTotal = cached;
+          } catch (_) {}
+        }
+        offlineMapDownloadProgress.value = seededTotal > 0
+            ? (seededDownloaded / seededTotal) * 100
+            : 0.0;
+        downloadedTiles.value = seededDownloaded;
+        totalTiles.value = seededTotal;
       } else {
         offlineMapDownloadProgress.value = 0.0;
         downloadedTiles.value = 0;
@@ -1297,6 +1311,11 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   final hasPartialDownload = false.obs;
   final RxInt partialDownloadedTiles = 0.obs;
   final RxInt partialTotalTiles = 0.obs;
+  // Cached tile count for the currently-downloaded state's FMTC store.
+  // Refreshed by checkOfflineMapAvailability() so the Settings UI can
+  // show "Map downloaded · NC · 8500 tiles".
+  final RxInt cachedTileCount = 0.obs;
+  final RxString offlineMapStateCode = ''.obs;
   final Rxn<DateTime> offlineMapLastUpdated = Rxn<DateTime>();
   StreamSubscription<DownloadProgress>? _downloadSubscription;
   bool _downloadCancelledIntentionally = false;
@@ -1379,6 +1398,23 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     final raw = prefs.getString('offline_map_last_updated');
     if (raw != null) {
       offlineMapLastUpdated.value = DateTime.tryParse(raw);
+    }
+    // Refresh cached tile count + state code so the Settings UI can show
+    // "Map downloaded · NC · 8500 tiles" without firing off another scan
+    // when the user opens the panel.
+    try {
+      final stateCode = await getCurrentStateCode();
+      if (stateCode != null) {
+        offlineMapStateCode.value = stateCode;
+        final store = FMTCStore('offline_tiles_$stateCode');
+        if (await store.manage.ready) {
+          cachedTileCount.value = (await store.stats.all).length;
+        } else {
+          cachedTileCount.value = 0;
+        }
+      }
+    } catch (_) {
+      // leave previous values intact on transient errors
     }
     // Detect partial (cancelled) download — store exists but never completed.
     final partialState = prefs.getString('offline_map_partial_state');

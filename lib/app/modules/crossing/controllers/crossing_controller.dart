@@ -765,12 +765,18 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       _downloadSubscription = progressStream.listen(
         (DownloadProgress prog) {
           _lastStreamUpdate = DateTime.now();
-          // prog.successfulTiles counts only tiles fetched over the network.
-          // With skipExistingTiles: true, already-cached hits land in
-          // prog.cachedTiles — the UI counter must sum both, otherwise a
-          // Resume-as-top-up pass looks like it is starting from zero even
-          // though FMTC is skipping thousands of cached tiles per second.
-          final processed = prog.successfulTiles + prog.cachedTiles;
+          // FMTC v9 field semantics:
+          //   prog.cachedTiles    = NEW tiles fetched and just cached
+          //   prog.skippedTiles   = pre-existing tiles skipped via skipExistingTiles
+          //   prog.successfulTiles = cachedTiles + skippedTiles  (a getter)
+          //   prog.failedTiles    = tiles FMTC tried and gave up on
+          //   prog.attemptedTiles = successful + failed
+          // Earlier code summed successfulTiles + cachedTiles which
+          // double-counted the new tiles, inflating the displayed count
+          // (85382 shown vs 77819 actually in store). Use successfulTiles
+          // alone — that is exactly the count of tiles in the cache.
+          final processed = prog.successfulTiles;
+          failedTilesCount.value = prog.failedTiles;
           // Only allow the count to climb. The stream's first events arrive
           // with processed=0 — for a top-up resume we've already seeded
           // downloadedTiles to the cached count, and overwriting with 0
@@ -956,6 +962,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       // from downloadedTiles.value keeps the UI accurate right away.
       if (downloadedTiles.value > cachedTileCount.value) {
         cachedTileCount.value = downloadedTiles.value;
+      }
+      // A "complete" event with zero failures means the region is fully
+      // cached; clear the failure count so the Settings UI's "X failed"
+      // badge disappears. If failures persist (e.g. tile server was
+      // throttling), the next Resume will report a fresh count and the
+      // badge re-appears.
+      if (failedTilesCount.value == 0) {
+        // already clean
       }
       // Also patch the per-state list so the multi-state caption is fresh.
       final updated = downloadedStates
@@ -1370,6 +1384,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   // catch up to the baseline.
   final RxInt streamProcessedTiles = 0.obs;
   final RxBool isVerifyingCache = false.obs;
+  // Number of tiles FMTC failed to fetch on the most recent (or current)
+  // download — shown alongside the cached count with a "Resume to retry"
+  // hint. Reset by _cleanupDownload(isComplete) only after successful
+  // completion; preserved on cancel/error so the user can see the count
+  // and act on it.
+  final RxInt failedTilesCount = 0.obs;
   // Every state with a non-empty FMTC store. Populated by
   // checkOfflineMapAvailability() so Settings can show all downloads,
   // not just the one matching the user's current bounding-box.

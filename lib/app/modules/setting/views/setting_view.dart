@@ -308,6 +308,27 @@ class SettingView extends GetView<SettingController> {
                             ),
                           ),
                         ),
+                      if (cc.failedTilesCount.value > 0)
+                        Padding(
+                          padding: EdgeInsets.only(top: 4.h),
+                          child: Row(
+                            children: [
+                              Icon(Icons.error_outline,
+                                  color: Colors.orange[700], size: 13.sp),
+                              SizedBox(width: 4.w),
+                              Flexible(
+                                child: Text(
+                                  '${cc.failedTilesCount.value} failed — tap Resume to retry',
+                                  style: TextStyle(
+                                    fontSize: 11.sp,
+                                    color: Colors.orange[800],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),

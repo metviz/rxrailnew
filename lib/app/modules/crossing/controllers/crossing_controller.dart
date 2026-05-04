@@ -715,13 +715,16 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         //       while skipExistingTiles speed-runs through cache hits.
         int seededDownloaded = partialDownloadedTiles.value;
         int seededTotal = partialTotalTiles.value;
-        if (seededDownloaded == 0) {
-          try {
-            final cached = (await store.stats.all).length;
-            seededDownloaded = cached;
-            if (seededTotal == 0) seededTotal = cached;
-          } catch (_) {}
-        }
+        // Always reconcile against the actual FMTC store. Partial values
+        // can be stale (e.g. 5437 from an ancient cancel never cleared)
+        // while the store has grown to 85 000+ via successive top-up
+        // passes. Take the max so the UI shows the real cached count
+        // instead of mis-seeding from a leftover SharedPreferences value.
+        try {
+          final cached = (await store.stats.all).length;
+          if (cached > seededDownloaded) seededDownloaded = cached;
+          if (cached > seededTotal) seededTotal = cached;
+        } catch (_) {}
         offlineMapDownloadProgress.value = seededTotal > 0
             ? (seededDownloaded / seededTotal) * 100
             : 0.0;

@@ -949,6 +949,24 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       partialDownloadedTiles.value = 0;
       partialTotalTiles.value = 0;
       offlineMapLastUpdated.value = now;
+      // Update the displayed cached count from the stream's final value
+      // immediately. FMTC's store.stats.length sometimes lags the stream
+      // (writes pending flush), so checkOfflineMapAvailability below may
+      // still report the pre-completion count for a few seconds. Seeding
+      // from downloadedTiles.value keeps the UI accurate right away.
+      if (downloadedTiles.value > cachedTileCount.value) {
+        cachedTileCount.value = downloadedTiles.value;
+      }
+      // Also patch the per-state list so the multi-state caption is fresh.
+      final updated = downloadedStates
+          .map((s) => s.code == stateCode
+              ? (code: s.code, tiles: downloadedTiles.value)
+              : s)
+          .toList();
+      if (!updated.any((s) => s.code == stateCode)) {
+        updated.add((code: stateCode, tiles: downloadedTiles.value));
+      }
+      downloadedStates.assignAll(updated);
 
       const AndroidNotificationDetails androidDetails =
           AndroidNotificationDetails(

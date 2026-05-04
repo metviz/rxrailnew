@@ -924,6 +924,10 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       await prefs.remove('offline_map_partial_downloaded');
       await prefs.remove('offline_map_partial_total');
       hasPartialDownload.value = false;
+      // Reset in-memory counters too — otherwise a stale value lingers
+      // and mis-seeds the next Resume top-up pass.
+      partialDownloadedTiles.value = 0;
+      partialTotalTiles.value = 0;
       offlineMapLastUpdated.value = now;
 
       const AndroidNotificationDetails androidDetails =
@@ -1469,7 +1473,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       partialDownloadedTiles.value = d;
       partialTotalTiles.value = t;
     } else {
+      // Reset in-memory partial counters too. _cleanupDownload(isComplete)
+      // only clears SharedPreferences keys, leaving stale values in these
+      // RxInt observables — which then mis-seed the Resume top-up flow
+      // (e.g. seeded 5437 from a long-cancelled session even though the
+      // store actually holds 77 815 tiles).
       hasPartialDownload.value = false;
+      partialDownloadedTiles.value = 0;
+      partialTotalTiles.value = 0;
     }
   }
 

@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:developer' as dev;
 import 'package:RXrail/app/services/crossing_cache_service.dart';
+import 'package:RXrail/app/services/background_watchdog_service.dart';
 import 'package:RXrail/app/services/test_logger.dart';
 
 class BackgroundLocationService extends GetxService {
@@ -118,6 +119,8 @@ class BackgroundLocationService extends GetxService {
         isRunning.value = true;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(_isServiceRunningKey, true);
+        // P2 — arm the watchdog so a frozen/killed service gets resurrected.
+        await BackgroundWatchdogService.start();
         TestLogger.log('✅ Background location service started', tag: 'MAIN');
         return true;
       }
@@ -137,6 +140,8 @@ class BackgroundLocationService extends GetxService {
         isRunning.value = false;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(_isServiceRunningKey, false);
+        // P2 — disarm the watchdog so it stops trying to restart the service.
+        await BackgroundWatchdogService.stop();
         TestLogger.log('✅ Background location service stopped', tag: 'MAIN');
       }
 

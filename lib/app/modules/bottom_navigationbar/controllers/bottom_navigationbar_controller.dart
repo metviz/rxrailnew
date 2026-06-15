@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import '../../../modules/news/controllers/news_controller.dart';
 import '../../../routes/app_pages.dart';
+import '../../../utils/permission_helper.dart';
 
 class BottomNavigationbarController extends GetxController {
   final RxInt currentIndex = 0.obs;
@@ -19,6 +20,19 @@ class BottomNavigationbarController extends GetxController {
   void onInit() {
     super.onInit();
     _getCurrentLocationState(); // auto-fetch when controller initializes
+  }
+
+  @override
+  void onReady() {
+    super.onReady();
+    // P1 — fire the one-time OEM "deep sleep" whitelist prompt here, on the
+    // settled home screen, NOT during the splash permission burst (which races
+    // Get.offNamed navigation and tears the dialog down before it can act).
+    // Delay so the home route's overlay is fully mounted — calling Get.dialog
+    // too early in the transition gets the dialog swallowed.
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      PermissionHelper.requestOemAutoStart();
+    });
   }
   /// ✅ Fetch current location and get state abbreviation (like "NC")
   Future<void> _getCurrentLocationState() async {

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'package:RXrail/app/notification_service.dart';
+import 'package:RXrail/app/services/background_survival_service.dart';
+
 class PermissionHelper {
   static Future<bool> requestBackgroundLocation() async {
     if (await Permission.locationAlways.isGranted) return true;
@@ -99,6 +102,40 @@ class PermissionHelper {
     await Permission.notification.request();
     await requestBackgroundLocation();
     await requestBatteryOptimization();
+    // NOTE: the OEM "deep sleep" whitelist prompt (requestOemAutoStart) is
+    // fired from the home screen's onReady, NOT here — running it inside the
+    // splash permission burst races Get.offNamed navigation, which tears the
+    // dialog down before it can open Settings.
+  }
+
+  /// One-time guided prompt to whitelist the app in the OEM's auto-start /
+  /// never-sleeping list. No-op on stock Android or if already shown.
+  static Future<void> requestOemAutoStart() async {
+    final survival = Get.isRegistered<BackgroundSurvivalService>()
+        ? Get.find<BackgroundSurvivalService>()
+        : Get.put(BackgroundSurvivalService(), permanent: true);
+
+    final instruction = await survival.maybePromptOemWhitelist();
+    if (instruction == null) return; // not an aggressive OEM, or already shown.
+
+    // The user asked to be taken to Settings automatically on first launch.
+    // We deliver the instruction as a NOTIFICATION rather than an in-app
+    // dialog: once we hand off to the Settings app the dialog is gone, and a
+    // Get.dialog fired from this post-splash path is unreliable (the overlay
+    // context is often null, so it gets swallowed). The notification persists
+    // in the shade, readable while the user is on the App-info screen.
+    try {
+      await NotificationService().showNotifications(
+        'Keep RXrail Alerts Running',
+        instruction,
+      );
+    } catch (_) {
+      // Notification is a nicety; never block the navigation on it.
+    }
+
+    // Auto-navigate straight to the (reachable) settings page.
+    await survival.openAutoStartSettings();
+    await survival.markOemPrompted();
   }
 
   static Future<void> showPermissionStatus() async {

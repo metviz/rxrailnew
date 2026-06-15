@@ -60,6 +60,24 @@ class BackgroundWatchdogService {
       await Workmanager().cancelByUniqueName(_taskUnique);
     } catch (_) {}
   }
+
+  /// Starts the foreground location service if it should be running but isn't.
+  /// Shared by the watchdog task and the geofence wake callback — both run in
+  /// background isolates and must (re)start the service without the GetX object.
+  /// Returns true if the service is running afterward.
+  static Future<bool> resurrectForegroundService({
+    required String notificationText,
+  }) async {
+    if (await FlutterForegroundTask.isRunningService) return true;
+    _initForegroundTask();
+    await FlutterForegroundTask.startService(
+      serviceId: 257,
+      notificationTitle: 'RXrail Active',
+      notificationText: notificationText,
+      callback: startLocationTracking,
+    );
+    return FlutterForegroundTask.isRunningService;
+  }
 }
 
 /// WorkManager background isolate entry point. MUST be top-level + annotated.
@@ -79,12 +97,8 @@ void watchdogDispatcher() {
 
       // Frozen/killed while it should be running → resurrect it.
       TestLogger.log('🐕 service down — restarting', tag: 'WATCHDOG');
-      _initForegroundTask();
-      await FlutterForegroundTask.startService(
-        serviceId: 257,
-        notificationTitle: 'RXrail Active',
+      await BackgroundWatchdogService.resurrectForegroundService(
         notificationText: 'Monitoring for railway crossings',
-        callback: startLocationTracking,
       );
     } catch (e) {
       TestLogger.log('🐕 watchdog restart failed: $e', tag: 'WATCHDOG');

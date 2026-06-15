@@ -67,6 +67,7 @@ dependencies:
   cached_network_image:
   wakelock_plus:
   flutter_dotenv: ^5.2.1
+  native_geofence: ^1.2.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -27,6 +27,7 @@ import 'package:workmanager/workmanager.dart';
 import '../../../notification_service.dart';
 import '../../../services/background_location_service.dart';
 import '../../../services/crossing_cache_service.dart';
+import '../../../services/geofence_safety_net_service.dart';
 import '../../../routes/app_pages.dart';
 import '../../../utils/app_color.dart';
 import '../../../utils/text_style.dart';
@@ -3159,6 +3160,15 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
             'longitude': c.longitude ?? '0',
             'street': c.street ?? 'Railway Crossing',
           }).toList(),
+        ));
+
+        // P3 — (re)register the nearest crossings as OS wake-geofences now that
+        // both a location and a fresh crossing list are in hand. Runs in the
+        // main isolate where NativeGeofenceManager is initialized.
+        unawaited(GeofenceSafetyNetService.syncGeofences(
+          pos.latitude,
+          pos.longitude,
+          force: true,
         ));
       } else {
         log_print.log('❌ FRA fetch failed: ${res.statusCode}');

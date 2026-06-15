@@ -8,6 +8,7 @@ import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'app/notification_service.dart';
 import 'app/routes/app_pages.dart';
 import 'app/services/background_watchdog_service.dart';
+import 'app/services/geofence_safety_net_service.dart';
 import 'app/shared_preferences/preference_manager.dart';
 import 'app/utils/app_strings.dart';
 
@@ -34,6 +35,9 @@ void main() async{
   // foreground service if the OS freezes it. Registration of the periodic task
   // itself happens when tracking starts (BackgroundLocationService).
   await BackgroundWatchdogService.initialize();
+  // P3 — register the geofence isolate so OS geofence transitions can wake the
+  // app from death. Geofences are (re)registered once a location is known.
+  await GeofenceSafetyNetService.initialize();
   // Initialize notification service
   // try {
   //   await NotificationService().init();

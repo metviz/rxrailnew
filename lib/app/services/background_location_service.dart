@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'dart:developer' as dev;
 import 'package:RXrail/app/services/crossing_cache_service.dart';
 import 'package:RXrail/app/services/background_watchdog_service.dart';
+import 'package:RXrail/app/services/geofence_safety_net_service.dart';
 import 'package:RXrail/app/services/test_logger.dart';
 
 class BackgroundLocationService extends GetxService {
@@ -48,6 +49,12 @@ class BackgroundLocationService extends GetxService {
           );
           currentPosition.value = position;
           onLocationUpdate?.call(position);
+          // P3 — keep the OS geofence ring centered on the user as they move
+          // (self-throttled; cheap no-op most fixes).
+          unawaited(GeofenceSafetyNetService.maybeSyncFromMovement(
+            position.latitude,
+            position.longitude,
+          ));
         } catch (e) {
           dev.log('Error parsing location from task: $e');
         }
@@ -142,6 +149,9 @@ class BackgroundLocationService extends GetxService {
         await prefs.setBool(_isServiceRunningKey, false);
         // P2 — disarm the watchdog so it stops trying to restart the service.
         await BackgroundWatchdogService.stop();
+        // P3 — tear down the OS geofences so they can't wake the app after the
+        // user has explicitly turned tracking off.
+        await GeofenceSafetyNetService.clear();
         TestLogger.log('✅ Background location service stopped', tag: 'MAIN');
       }
 

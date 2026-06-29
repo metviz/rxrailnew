@@ -55,24 +55,25 @@ class NewsController extends GetxController {
 
     final now = DateTime.now();
 
-    List<RailCrash> filtered = all
-        .where((c) => now.difference(c.date).inDays <= 14)
-        .toList();
+    // Official FRA incident records are ALWAYS kept — they're authoritative and
+    // their reporting lags weeks/months, so a recency window would hide them
+    // entirely. The dataset query already returns only the 10 most recent for
+    // the state, newest first.
+    final official = all.where((c) => c.type == 'Official').toList();
 
-    // Extend to 30 days if nothing in the past 2 weeks
-    if (filtered.isEmpty) {
-      filtered = all
-          .where((c) => now.difference(c.date).inDays <= 30)
-          .toList();
+    // News articles get a recency window so the feed stays current.
+    final news = all.where((c) => c.type != 'Official').toList();
+    List<RailCrash> recentNews =
+        news.where((c) => now.difference(c.date).inDays <= 14).toList();
+    if (recentNews.isEmpty) {
+      recentNews =
+          news.where((c) => now.difference(c.date).inDays <= 30).toList();
     }
+    if (recentNews.isEmpty) recentNews = news;
 
-    // If still nothing, show all available results
-    if (filtered.isEmpty) {
-      filtered = List.of(all);
-    }
-
-    // Sort latest first
-    filtered.sort((a, b) => b.date.compareTo(a.date));
+    // Combine official records with recent news, newest first.
+    final filtered = [...official, ...recentNews]
+      ..sort((a, b) => b.date.compareTo(a.date));
 
     crashes.assignAll(filtered);
     loading.value = false;

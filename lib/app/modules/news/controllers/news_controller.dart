@@ -64,8 +64,15 @@ class NewsController extends GetxController {
 
     // News articles: show the latest N (newest-first), like a Google results
     // page — a fixed count reads better than a date window, which left the
-    // feed nearly empty when there was little recent coverage.
-    final news = all.where((c) => c.type != 'Official').toList()
+    // feed nearly empty when there was little recent coverage. Google News RSS
+    // fuzzy-matches across regions and returns the same story twice, so drop
+    // out-of-state items and de-duplicate by title.
+    final seenTitles = <String>{};
+    final news = all
+        .where((c) => c.type != 'Official')
+        .where((c) => _isForState(c.title, state))
+        .where((c) => seenTitles.add(c.title.trim().toLowerCase()))
+        .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
     final recentNews = news.take(_maxNewsItems).toList();
 
@@ -99,6 +106,31 @@ class NewsController extends GetxController {
     if (input.length == 2) return input.toUpperCase();
     return map[input] ?? input.toUpperCase().substring(0, 2);
   }
+
+  /// Keeps an article if it names our state, or names no state at all (local
+  /// outlets often cite only the city). Drops it only if it names a DIFFERENT
+  /// state — that's how the "Iowa derailment" slipped into the NC feed.
+  static bool _isForState(String title, String stateName) {
+    final t = title.toLowerCase();
+    if (t.contains(stateName.toLowerCase())) return true;
+    for (final s in _stateNames) {
+      if (s != stateName && t.contains(s.toLowerCase())) return false;
+    }
+    return true;
+  }
+
+  static const List<String> _stateNames = [
+    'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
+    'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho',
+    'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana',
+    'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
+    'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
+    'New Hampshire', 'New Jersey', 'New Mexico', 'New York',
+    'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
+    'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
+    'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
+    'West Virginia', 'Wisconsin', 'Wyoming',
+  ];
 
   void openLink(String url) {
     final uri = Uri.parse(url);
@@ -144,17 +176,30 @@ class RailCrashService {
     return crashes;
   }
 
-  /// Builds a readable title from the narrative, falling back to the city.
+  /// Builds a clean, readable title — severity + place — instead of the raw
+  /// ALL-CAPS FRA narrative (e.g. "WTRY-J1600 CREWS WERE SERVICING…").
   static String _fraTitle(Map<String, dynamic> item, String stateAbbr) {
-    final narr = (item['narr1'] as String? ?? '').trim();
-    if (narr.isNotEmpty) {
-      final snippet = narr.length > 90 ? '${narr.substring(0, 90)}…' : narr;
-      return snippet;
-    }
-    final city = (item['city'] as String? ?? '').trim();
-    return city.isNotEmpty
-        ? 'Railroad incident in $city, $stateAbbr'
-        : 'Railroad incident';
+    num n(dynamic v) => num.tryParse(v?.toString() ?? '') ?? 0;
+    final killed = n(item['totkld']);
+    final injured = n(item['totinj']);
+    final city = _titleCase((item['city'] as String? ?? '').trim());
+    final place = city.isNotEmpty ? ' in $city, $stateAbbr' : '';
+
+    final severity = killed > 0
+        ? 'Fatal railroad crossing incident'
+        : injured > 0
+            ? 'Injury railroad crossing incident'
+            : 'Railroad crossing incident';
+    return '$severity$place';
+  }
+
+  static String _titleCase(String s) {
+    if (s.isEmpty) return s;
+    return s
+        .toLowerCase()
+        .split(RegExp(r'\s+'))
+        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
   }
 
   /// The dataset has no date column; reconstruct it from year4/month/day.

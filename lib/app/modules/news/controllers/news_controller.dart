@@ -35,6 +35,9 @@ class NewsController extends GetxController {
   var crashes = <RailCrash>[].obs;
   var loading = true.obs;
 
+  /// Max news articles shown (count-based, like a search results page).
+  static const int _maxNewsItems = 12;
+
   late String state;
   late String stateAbbr;
 
@@ -53,25 +56,20 @@ class NewsController extends GetxController {
     final all = result['crashes'] as List<RailCrash>;
     feedTitle.value = result['feedTitle'] as String;
 
-    final now = DateTime.now();
-
     // Official FRA incident records are ALWAYS kept — they're authoritative and
     // their reporting lags weeks/months, so a recency window would hide them
     // entirely. The dataset query already returns only the 10 most recent for
     // the state, newest first.
     final official = all.where((c) => c.type == 'Official').toList();
 
-    // News articles get a recency window so the feed stays current.
-    final news = all.where((c) => c.type != 'Official').toList();
-    List<RailCrash> recentNews =
-        news.where((c) => now.difference(c.date).inDays <= 14).toList();
-    if (recentNews.isEmpty) {
-      recentNews =
-          news.where((c) => now.difference(c.date).inDays <= 30).toList();
-    }
-    if (recentNews.isEmpty) recentNews = news;
+    // News articles: show the latest N (newest-first), like a Google results
+    // page — a fixed count reads better than a date window, which left the
+    // feed nearly empty when there was little recent coverage.
+    final news = all.where((c) => c.type != 'Official').toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final recentNews = news.take(_maxNewsItems).toList();
 
-    // Combine official records with recent news, newest first.
+    // Combine official records with the latest news, newest first.
     final filtered = [...official, ...recentNews]
       ..sort((a, b) => b.date.compareTo(a.date));
 

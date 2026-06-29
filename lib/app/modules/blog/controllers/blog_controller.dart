@@ -138,10 +138,15 @@ class BlogController extends GetxController {
   }
 
   static Future<List<SafetyVideoModel>> _fetchYouTubeSearch(String query) async {
-    // Guard against NotInitializedError when .env is missing (CI / fresh
-    // clone). flutter_dotenv throws on .env access if load() didn't succeed.
-    if (!dotenv.isInitialized) return [];
-    final apiKey = dotenv.env['YOUTUBE_API_KEY'] ?? '';
+    // Prefer a build-time key passed via --dart-define=YOUTUBE_API_KEY=...
+    // so it is compiled into the binary rather than shipped as a loose .env
+    // asset (.env is intentionally NOT bundled, for security). Fall back to
+    // .env for local dev. flutter_dotenv throws on access if load() failed, so
+    // guard with isInitialized.
+    const buildKey = String.fromEnvironment('YOUTUBE_API_KEY');
+    final apiKey = buildKey.isNotEmpty
+        ? buildKey
+        : (dotenv.isInitialized ? (dotenv.env['YOUTUBE_API_KEY'] ?? '') : '');
     if (apiKey.isEmpty) return [];
 
     final uri = Uri(

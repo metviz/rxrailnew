@@ -75,9 +75,13 @@
             android:exported="false"
             tools:node="replace" />
 
+        <!-- location ONLY (was dataSync|location). Android 14+ caps a dataSync
+             foreground service at 6h/day, then force-stops it with onTimeout
+             (isTimeout=true) — this was killing tracking every 6 hours. The
+             location FGS type has no such limit, so it runs indefinitely. -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
-            android:foregroundServiceType="dataSync|location"
+            android:foregroundServiceType="location"
             android:exported="false"
             tools:node="replace" />
 

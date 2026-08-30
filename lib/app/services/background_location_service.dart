@@ -9,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:developer' as dev;
 import 'package:RXrail/app/services/crossing_cache_service.dart';
+import 'package:RXrail/app/services/background_watchdog_service.dart';
+import 'package:RXrail/app/services/geofence_safety_net_service.dart';
 import 'package:RXrail/app/services/test_logger.dart';
 
 class BackgroundLocationService extends GetxService {
@@ -47,6 +49,12 @@ class BackgroundLocationService extends GetxService {
           );
           currentPosition.value = position;
           onLocationUpdate?.call(position);
+          // P3 — keep the OS geofence ring centered on the user as they move
+          // (self-throttled; cheap no-op most fixes).
+          unawaited(GeofenceSafetyNetService.maybeSyncFromMovement(
+            position.latitude,
+            position.longitude,
+          ));
         } catch (e) {
           dev.log('Error parsing location from task: $e');
         }
@@ -118,6 +126,8 @@ class BackgroundLocationService extends GetxService {
         isRunning.value = true;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(_isServiceRunningKey, true);
+        // P2 — arm the watchdog so a frozen/killed service gets resurrected.
+        await BackgroundWatchdogService.start();
         TestLogger.log('✅ Background location service started', tag: 'MAIN');
         return true;
       }
@@ -137,6 +147,11 @@ class BackgroundLocationService extends GetxService {
         isRunning.value = false;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(_isServiceRunningKey, false);
+        // P2 — disarm the watchdog so it stops trying to restart the service.
+        await BackgroundWatchdogService.stop();
+        // P3 — tear down the OS geofences so they can't wake the app after the
+        // user has explicitly turned tracking off.
+        await GeofenceSafetyNetService.clear();
         TestLogger.log('✅ Background location service stopped', tag: 'MAIN');
       }
 
@@ -212,25 +227,49 @@ Future<int> _showCrossingAlert(
       ? '${distanceMeters.round()}m away'
       : '${(distanceMeters / 1000).toStringAsFixed(1)}km away';
 
-  const androidDetails = AndroidNotificationDetails(
-    'railwaycrossingalerts',
-    'Railway Crossing Alerts',
+  final prefs = await SharedPreferences.getInstance();
+  final soundEnabled = prefs.getBool('isWarningSoundEnabled') ?? true;
+  final vibrationEnabled = prefs.getBool('isVibrationEnabled') ?? true;
+
+  // Android 8+ locks sound/vibration on a NotificationChannel at creation
+  // time; later mutations via AndroidNotificationDetails are ignored. Route
+  // through one of four pre-configured channels so the user's toggles take
+  // effect on the next alert.
+  final String channelId;
+  final String channelName;
+  if (soundEnabled && vibrationEnabled) {
+    channelId = 'railway_crossing_sound_vibe';
+    channelName = 'Railway Crossings (Sound + Vibration)';
+  } else if (soundEnabled) {
+    channelId = 'railway_crossing_sound';
+    channelName = 'Railway Crossings (Sound)';
+  } else if (vibrationEnabled) {
+    channelId = 'railway_crossing_vibe';
+    channelName = 'Railway Crossings (Vibration)';
+  } else {
+    channelId = 'railway_crossing_silent';
+    channelName = 'Railway Crossings (Silent)';
+  }
+
+  final androidDetails = AndroidNotificationDetails(
+    channelId,
+    channelName,
     channelDescription: 'High priority alerts for nearby railway crossings',
     importance: Importance.high,
     priority: Priority.high,
     enableLights: true,
-    enableVibration: true,
-    playSound: true,
+    enableVibration: vibrationEnabled,
+    playSound: soundEnabled,
     autoCancel: true,
     icon: '@mipmap/ic_launcher',
   );
 
-  final notifId = crossingId.hashCode.abs() % 10000;
+  final notifId = crossingId.hashCode.abs();
   await plugin.show(
     notifId,
     '⚠️ Railway Crossing Ahead',
     '$street — $distanceText',
-    const NotificationDetails(android: androidDetails),
+    NotificationDetails(android: androidDetails),
   );
   return notifId;
 }
@@ -246,7 +285,14 @@ class LocationTaskHandler extends TaskHandler {
 
   final Map<String, int> _alertCount = {};
   final Map<String, int> _activeNotifIds = {};
-  static const int _maxAlertsPerVisit = 2;
+  // One audible alert per crossing approach. With 2, the GPS path and
+  // the 5-s timer fire the second alert ~2 s after the first; Android
+  // suppresses sound on rapid repeats to the same channel, so the
+  // second alert lands silently in the shade and the user hears only
+  // the first. Departure hysteresis resets the count when the user
+  // moves past threshold*1.2, so re-passing the same crossing later
+  // re-arms the alert.
+  static const int _maxAlertsPerVisit = 1;
 
   final FlutterLocalNotificationsPlugin _notifPlugin =
       FlutterLocalNotificationsPlugin();
@@ -254,11 +300,17 @@ class LocationTaskHandler extends TaskHandler {
 
   Position? _lastPosition;
   DateTime? _lastFraFetch;
+  bool _checkInProgress = false;
+  static const String _kLastFraFetchKey = 'bg_last_fra_fetch';
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await TestLogger.init(tag: 'BG');
     await TestLogger.log('🚀 Location tracking started', tag: 'BG');
+    // Restore persisted throttle timestamp so restarts don't bypass the 30-min limit
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kLastFraFetchKey);
+    if (raw != null) _lastFraFetch = DateTime.tryParse(raw);
 
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.best,
@@ -289,7 +341,11 @@ class LocationTaskHandler extends TaskHandler {
         // Check proximity on every GPS fix, not just on the repeat timer.
         // At driving speed (~60 km/h = 17 m/s) the 5 s timer fires every
         // ~85 m — a crossing zone could be entered and exited between ticks.
-        await _checkProximity(source: 'GPS');
+        // Guard against concurrent executions (GPS fixes can arrive faster
+        // than _checkProximity completes at highway speed).
+        if (_checkInProgress) return;
+        _checkInProgress = true;
+        _checkProximity(source: 'GPS').whenComplete(() => _checkInProgress = false);
       },
       onError: (error) {
         TestLogger.log('❌ Location stream error: $error', tag: 'BG');
@@ -299,7 +355,9 @@ class LocationTaskHandler extends TaskHandler {
 
   @override
   void onRepeatEvent(DateTime timestamp) {
-    _checkProximity(source: 'TIMER');
+    if (_checkInProgress) return;
+    _checkInProgress = true;
+    _checkProximity(source: 'TIMER').whenComplete(() => _checkInProgress = false);
   }
 
   Future<void> _checkProximity({String source = 'TIMER'}) async {
@@ -325,10 +383,21 @@ class LocationTaskHandler extends TaskHandler {
               altitudeAccuracy: 0.0,
               headingAccuracy: 0.0,
             );
+            // Reject stale saved fixes to avoid false alerts near a
+            // previously-visited crossing after service kill / reboot.
+            final age = DateTime.now().difference(position.timestamp);
+            if (age > const Duration(seconds: 60)) {
+              await TestLogger.log(
+                '[$source] saved position is ${age.inSeconds}s old — skipping',
+                tag: 'BG',
+              );
+              return;
+            }
             await TestLogger.log(
               '[$source] using saved position '
               '${position.latitude.toStringAsFixed(5)}, '
-              '${position.longitude.toStringAsFixed(5)}',
+              '${position.longitude.toStringAsFixed(5)} '
+              '(${age.inSeconds}s old)',
               tag: 'BG',
             );
           } catch (_) {}
@@ -352,10 +421,34 @@ class LocationTaskHandler extends TaskHandler {
       final settings = await CrossingCacheService.loadWarningSettings();
       if (!settings.enabled) return;
 
-      // 4. Load crossings — fetch from FRA if cache is empty
+      // 4. Load crossings — fetch from FRA if cache is empty OR if the
+      // user has driven far from the centre of the last bbox fetch.
+      // Without this, a 25 km drive (Apex → Raleigh) leaves the user in
+      // an area whose crossings were never cached, and no alert fires
+      // even when right next to a tracked crossing.
       List<Map<String, dynamic>> crossings =
           await CrossingCacheService.loadCrossings();
-      if (crossings.isEmpty) {
+      bool forceRefetch = false;
+      final prefs = await SharedPreferences.getInstance();
+      final lastLat = prefs.getDouble('bg_last_fetch_lat');
+      final lastLng = prefs.getDouble('bg_last_fetch_lng');
+      if (lastLat != null && lastLng != null) {
+        final drift = _haversineDistanceMeters(
+            position.latitude, position.longitude, lastLat, lastLng);
+        // 15 km — leaves ~10 km of bbox slack so the user can keep moving
+        // for a few more minutes before the next refetch is needed. This
+        // also overrides the 30-minute throttle when the user has driven
+        // out of coverage, so they don't drive a whole half-hour with the
+        // wrong crossing set loaded.
+        if (drift > 15000) {
+          await TestLogger.log(
+              '[$source] cache drift ${(drift / 1000).toStringAsFixed(1)} km — refetching',
+              tag: 'BG');
+          forceRefetch = true;
+          _lastFraFetch = null; // bypass 30-min throttle
+        }
+      }
+      if (crossings.isEmpty || forceRefetch) {
         crossings = await _fetchAndCacheCrossings(position);
         if (crossings.isEmpty) {
           await TestLogger.log('[$source] no cached crossings', tag: 'BG');
@@ -365,6 +458,12 @@ class LocationTaskHandler extends TaskHandler {
 
       final double threshold = settings.distanceMeters;
       final Set<String> stillNear = {};
+      // Track the closest crossing this tick so the summary line tells us
+      // whether the user was anywhere near one — silent "checked N" logs
+      // were hiding the answer to "did the user actually pass a crossing?".
+      double nearestDist = double.infinity;
+      String nearestId = '';
+      String nearestStreet = '';
 
       for (final crossing in crossings) {
         final id = crossing['crossingid'] as String? ?? '';
@@ -379,7 +478,16 @@ class LocationTaskHandler extends TaskHandler {
           position.latitude, position.longitude, lat, lng,
         );
 
-        if (distance <= threshold * 2) stillNear.add(id);
+        if (distance < nearestDist) {
+          nearestDist = distance;
+          nearestId = id;
+          nearestStreet = street;
+        }
+
+        // Hysteresis: keep the notification alive until the user is past
+        // 1.2x the alert threshold. 2x kept the alert lingering ~30 s past
+        // the crossing at highway speed; 1.2x clears it within ~5 s.
+        if (distance <= threshold * 1.2) stillNear.add(id);
 
         if (distance <= threshold) {
           final count = _alertCount[id] ?? 0;
@@ -394,7 +502,18 @@ class LocationTaskHandler extends TaskHandler {
               final notifId =
                   await _showCrossingAlert(_notifPlugin, id, street, distance);
               _activeNotifIds[id] = notifId;
+            } else {
+              await TestLogger.log(
+                '[$source] ⚠️ alert SUPPRESSED: _notifInitialized=false',
+                tag: 'BG',
+              );
             }
+          } else {
+            await TestLogger.log(
+              '[$source] 🔕 alert capped (${_maxAlertsPerVisit}/visit) — $street '
+              '${distance.round()}m',
+              tag: 'BG',
+            );
           }
         }
       }
@@ -411,12 +530,17 @@ class LocationTaskHandler extends TaskHandler {
         _alertCount.remove(id);
       }
 
+      final nearestText = nearestDist.isFinite
+          ? 'nearest=${nearestDist.round()}m ($nearestId $nearestStreet)'
+          : 'nearest=∞';
       await TestLogger.log(
         '[$source] checked ${crossings.length} crossings '
         'threshold=${threshold.round()}m '
+        '$nearestText '
         'pos=${position.latitude.toStringAsFixed(5)},${position.longitude.toStringAsFixed(5)} '
         'acc=${position.accuracy.round()}m '
-        'spd=${position.speed.toStringAsFixed(1)}m/s',
+        'spd=${position.speed.toStringAsFixed(1)}m/s '
+        'notifInit=$_notifInitialized',
         tag: 'BG',
       );
     } catch (e) {
@@ -433,8 +557,15 @@ class LocationTaskHandler extends TaskHandler {
         now.difference(_lastFraFetch!).inMinutes < 30) {
       return [];
     }
-    // Set before attempt so failures don't cause hammering every 5 seconds
+    // Set before attempt so failures don't cause hammering every 5 seconds.
+    // Persisted to SharedPreferences so the throttle survives service restarts.
     _lastFraFetch = now;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kLastFraFetchKey, now.toIso8601String());
+    // Record fetch center so _checkProximity can detect "user has driven
+    // out of the last cached bbox" and trigger a refetch.
+    await prefs.setDouble('bg_last_fetch_lat', position.latitude);
+    await prefs.setDouble('bg_last_fetch_lng', position.longitude);
     try {
       const double delta = 0.225; // ~25 km
       final latMin = position.latitude - delta;
@@ -442,32 +573,72 @@ class LocationTaskHandler extends TaskHandler {
       final lngMin = position.longitude - delta;
       final lngMax = position.longitude + delta;
 
-      // Use Uri constructor so query parameters are properly encoded
-      final uri = Uri.https(
-        'data.transportation.gov',
-        '/resource/vhwz-raag.json',
-        {
-          '\$where': 'latitude>${latMin.toStringAsFixed(6)}'
-              ' AND latitude<${latMax.toStringAsFixed(6)}'
-              ' AND longitude>${lngMin.toStringAsFixed(6)}'
-              ' AND longitude<${lngMax.toStringAsFixed(6)}',
-          '\$limit': '10000',
-        },
+      // Uri.parse avoids Uri.https() percent-encoding '$' → '%24'. Latitude
+      // and longitude are stored as text in Socrata, so '>' needs a
+      // ::number cast. The dataset has a handful of malformed rows whose
+      // text contains stray characters (e.g. "29.303213°", "42.922107O")
+      // that break the cast for the *entire* query — filter them out
+      // first with chained NOT LIKE. In the URL, '%' (SoQL LIKE wildcard)
+      // must be encoded as %25 and '°' as %C2%B0.
+      //
+      // Server-side filter crossingposition='At Grade' AND $select shave the
+      // 3 MB+ default response down to ~76 KB. $limit=1000 stays within the
+      // ~1024-row hard cap Socrata enforces (anything beyond that drops the
+      // connection mid-stream — see FormatException history in commit log).
+      final uri = Uri.parse(
+        'https://data.transportation.gov/resource/vhwz-raag.json'
+        '?\$select=crossingid,latitude,longitude,street'
+        "&\$where=crossingposition='At Grade'"
+        " AND latitude NOT LIKE '%25%C2%B0%25'"
+        " AND latitude NOT LIKE '%25O%25'"
+        " AND latitude NOT LIKE '%25o%25'"
+        " AND longitude NOT LIKE '%25%C2%B0%25'"
+        " AND longitude NOT LIKE '%25O%25'"
+        " AND longitude NOT LIKE '%25o%25'"
+        ' AND latitude::number>${latMin.toStringAsFixed(6)}'
+        ' AND latitude::number<${latMax.toStringAsFixed(6)}'
+        ' AND longitude::number>${lngMin.toStringAsFixed(6)}'
+        ' AND longitude::number<${lngMax.toStringAsFixed(6)}'
+        // Socrata reliably caps the response at ~1024 rows even with
+        // $limit=10000, dropping the connection mid-row beyond that. Cap
+        // at 1000 so the JSON body always parses cleanly. A 25 km bbox
+        // produces well under that for any US region.
+        '&\$limit=1000',
       );
 
-      final res = await http.get(uri).timeout(const Duration(seconds: 15));
-      if (res.statusCode != 200) {
-        await TestLogger.log(
-            '[BG] FRA fetch failed: ${res.statusCode}', tag: 'BG');
-        return [];
+      // Stream the body via Client().send() so we can apply a generous read
+      // timeout independent of header timeout — http.get's single timeout
+      // covers the full request/response lifecycle and was getting tripped
+      // on slow cellular connections, leaving us with a half-read body.
+      final client = http.Client();
+      http.StreamedResponse streamed;
+      String body;
+      try {
+        streamed = await client
+            .send(http.Request('GET', uri))
+            .timeout(const Duration(seconds: 30));
+        if (streamed.statusCode != 200) {
+          final preview =
+              await streamed.stream.bytesToString().timeout(
+                  const Duration(seconds: 5),
+                  onTimeout: () => '');
+          await TestLogger.log(
+              '[BG] FRA fetch failed: ${streamed.statusCode} — '
+              '${preview.length > 200 ? preview.substring(0, 200) : preview}',
+              tag: 'BG');
+          return [];
+        }
+        body = await streamed.stream
+            .bytesToString()
+            .timeout(const Duration(seconds: 45));
+      } finally {
+        client.close();
       }
 
-      final data = jsonDecode(res.body) as List<dynamic>;
+      final data = jsonDecode(body) as List<dynamic>;
       final crossings = <Map<String, dynamic>>[];
       for (final e in data) {
         if (e['latitude'] == null || e['longitude'] == null) continue;
-        if ((e['crossingposition'] ?? '').toString().trim().toLowerCase() !=
-            'at grade') continue;
         final id = (e['crossingid'] as String? ?? '').trim();
         if (id.isEmpty) continue;
         crossings.add({
@@ -490,9 +661,26 @@ class LocationTaskHandler extends TaskHandler {
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
-    await TestLogger.log('🛑 Location tracking stopped', tag: 'BG');
+    await TestLogger.log(
+      '🛑 Location tracking stopped (isTimeout=$isTimeout)',
+      tag: 'BG',
+    );
     await _positionStream?.cancel();
     _positionStream = null;
+
+    // Mark "service should auto-restart on next opportunity" so the MAIN
+    // isolate's BackgroundLocationService.onInit detects it via the
+    // existing _isServiceRunningKey check and re-starts the service the
+    // next time the app boots. Without this, an Android-killed service
+    // stays dead until the user manually re-toggles tracking — which is
+    // exactly what we saw in field tests (no alerts after the service
+    // died mid-drive).
+    try {
+      // Mirror BackgroundLocationService._isServiceRunningKey — string
+      // literal because that field is private to the MAIN-isolate class.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_service_running', true);
+    } catch (_) {}
   }
 
   @override

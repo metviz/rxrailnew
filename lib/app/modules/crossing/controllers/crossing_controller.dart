@@ -27,6 +27,7 @@ import 'package:workmanager/workmanager.dart';
 import '../../../notification_service.dart';
 import '../../../services/background_location_service.dart';
 import '../../../services/crossing_cache_service.dart';
+import '../../../services/geofence_safety_net_service.dart';
 import '../../../routes/app_pages.dart';
 import '../../../utils/app_color.dart';
 import '../../../utils/text_style.dart';
@@ -79,6 +80,8 @@ Future<bool> _handleLocationUpdate(Map<String, dynamic>? inputData) async {
 Future<bool> _patchOfflineTiles() async {
   try {
     log_print.log('🗺️ Weekly tile patch started');
+    // Workmanager runs in a separate isolate — FMTC must be re-initialized here.
+    await FMTCObjectBoxBackend().initialise();
     final prefs = await SharedPreferences.getInstance();
     final stateCode = prefs.getString('current_state_code') ?? 'NC';
     final store = FMTCStore('offline_tiles_$stateCode');
@@ -103,6 +106,15 @@ Future<bool> _patchOfflineTiles() async {
     log_print.log('❌ Weekly tile patch error: $e');
     return false;
   }
+}
+
+/// One search hit from Nominatim — enough to show in a dropdown and to
+/// drive routing without a second reverse-geocode round trip.
+class GeocodeResult {
+  final double lat;
+  final double lng;
+  final String displayName;
+  const GeocodeResult(this.lat, this.lng, this.displayName);
 }
 
 class CrossingController extends GetxController with WidgetsBindingObserver {
@@ -169,8 +181,15 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     try {
       final cached = await CrossingCacheService.loadCrossings();
       if (cached.isNotEmpty) return; // already populated
-      final pos = await Geolocator.getLastKnownPosition();
-      if (pos == null) return;
+      Position? pos = await Geolocator.getLastKnownPosition();
+      // On fresh install or post-reboot, last known position is null — fall
+      // back to a live fix so the background isolate has data on cold start.
+      pos ??= await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
       await fetchLocations(center: LatLng(pos.latitude, pos.longitude));
     } catch (_) {}
   }
@@ -560,7 +579,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //   );
   // }
   // ✅ COMPLETELY REWRITTEN download method
-  Future<void> downloadOfflineMapForState(String stateCode) async {
+  Future<void> downloadOfflineMapForState(String stateCode, {bool resume = false}) async {
     if (isDownloadingOfflineMap.value) {
       Get.snackbar(
         "Download in Progress",
@@ -634,9 +653,9 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     final store = FMTCStore('offline_tiles_$stateCode');
 
     try {
-      // Check if already downloaded
+      // Check if already downloaded (skip dialog when resuming a partial download)
       final exists = await store.manage.ready;
-      if (exists) {
+      if (exists && !resume) {
         final stats = await store.stats.all;
         if (stats.length > 0) {
           final shouldRedownload = await Get.dialog<bool>(
@@ -663,6 +682,11 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
           if (shouldRedownload != true) return;
 
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('offline_map_partial_state');
+          await prefs.remove('offline_map_partial_downloaded');
+          await prefs.remove('offline_map_partial_total');
+          hasPartialDownload.value = false;
           await store.manage.delete();
         }
       }
@@ -680,12 +704,38 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       await _startDownloadForegroundService(stateCode);
       log_print.log("✅ Foreground service started");
 
-      // Set download state
+      // Set download state — seed counters from saved progress when resuming
       isDownloadingOfflineMap.value = true;
       _currentDownloadingState = stateCode;
-      offlineMapDownloadProgress.value = 0.0;
-      downloadedTiles.value = 0;
-      totalTiles.value = 0;
+      if (resume) {
+        // Two flavours of resume share this branch:
+        //   (a) Genuine pause/resume — partialTotalTiles set on cancel
+        //   (b) Top-up of a fully-downloaded map — no partial marker, but
+        //       FMTC's store already has N cached tiles. Seed from
+        //       store.stats.length so the UI doesn't display "0/total"
+        //       while skipExistingTiles speed-runs through cache hits.
+        int seededDownloaded = partialDownloadedTiles.value;
+        int seededTotal = partialTotalTiles.value;
+        // Always reconcile against the actual FMTC store. Partial values
+        // can be stale (e.g. 5437 from an ancient cancel never cleared)
+        // while the store has grown to 85 000+ via successive top-up
+        // passes. Take the max so the UI shows the real cached count
+        // instead of mis-seeding from a leftover SharedPreferences value.
+        try {
+          final cached = (await store.stats.all).length;
+          if (cached > seededDownloaded) seededDownloaded = cached;
+          if (cached > seededTotal) seededTotal = cached;
+        } catch (_) {}
+        offlineMapDownloadProgress.value = seededTotal > 0
+            ? (seededDownloaded / seededTotal) * 100
+            : 0.0;
+        downloadedTiles.value = seededDownloaded;
+        totalTiles.value = seededTotal;
+      } else {
+        offlineMapDownloadProgress.value = 0.0;
+        downloadedTiles.value = 0;
+        totalTiles.value = 0;
+      }
       _lastStreamUpdate = DateTime.now();
 
       final region = RectangleRegion(bounds);
@@ -697,6 +747,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           userAgentPackageName: 'com.rxrail.app',
         ),
       );
+
+      // Clear any lingering FMTC download instance before starting a new one.
+      // Prevents "A download instance with ID 0 already exists" errors.
+      try {
+        await store.download.cancel();
+      } catch (_) {}
 
       final progressStream = store.download.startForeground(
         region: downloadable,
@@ -710,17 +766,51 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       _downloadSubscription = progressStream.listen(
         (DownloadProgress prog) {
           _lastStreamUpdate = DateTime.now();
-          downloadedTiles.value = prog.successfulTiles;
-          totalTiles.value = prog.maxTiles;
+          // FMTC v9 field semantics:
+          //   prog.cachedTiles    = NEW tiles fetched and just cached
+          //   prog.skippedTiles   = pre-existing tiles skipped via skipExistingTiles
+          //   prog.successfulTiles = cachedTiles + skippedTiles  (a getter)
+          //   prog.failedTiles    = tiles FMTC tried and gave up on
+          //   prog.attemptedTiles = successful + failed
+          // Earlier code summed successfulTiles + cachedTiles which
+          // double-counted the new tiles, inflating the displayed count
+          // (85382 shown vs 77819 actually in store). Use successfulTiles
+          // alone — that is exactly the count of tiles in the cache.
+          final processed = prog.successfulTiles;
+          failedTilesCount.value = prog.failedTiles;
+          // Only allow the count to climb. The stream's first events arrive
+          // with processed=0 — for a top-up resume we've already seeded
+          // downloadedTiles to the cached count, and overwriting with 0
+          // makes the UI flash "starting from 0" before climbing back.
+          // Surface the live in-stream count separately so the UI can show
+          // "Verifying X / N cached tiles" while the seeded counter sits
+          // frozen at the baseline cache size.
+          streamProcessedTiles.value = processed;
+          isVerifyingCache.value = processed < downloadedTiles.value;
 
-          final percent = prog.percentageProgress;
+          if (processed > downloadedTiles.value) {
+            downloadedTiles.value = processed;
+          }
+          if (prog.maxTiles > totalTiles.value) {
+            totalTiles.value = prog.maxTiles;
+          }
+
+          // Compute percent from our seeded counters rather than
+          // prog.percentageProgress. FMTC's percentage is "tiles attempted
+          // this stream / maxTiles", which starts at 0 every Resume and
+          // would visually shrink from the seeded 91% back to 11% before
+          // climbing again.
+          final percent = totalTiles.value > 0
+              ? (downloadedTiles.value / totalTiles.value) * 100
+              : 0.0;
           if (percent.isFinite) {
             offlineMapDownloadProgress.value = percent;
 
             log_print.log(
               "📥 ${DateTime.now().toString().split(' ')[1]} - "
               "${percent.toStringAsFixed(1)}% - "
-              "${prog.successfulTiles}/${prog.maxTiles} tiles - "
+              "$processed/${prog.maxTiles} tiles "
+              "(net:${prog.successfulTiles} cache:${prog.cachedTiles}) - "
               "Background: $_isAppInBackground",
             );
           }
@@ -730,6 +820,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           _cleanupDownload(stateCode, isError: true, error: e.toString());
         },
         onDone: () {
+          if (_downloadCancelledIntentionally) return;
           log_print.log("✅ Download complete for $stateCode");
           _cleanupDownload(stateCode, isComplete: true);
         },
@@ -838,6 +929,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     isDownloadingOfflineMap.value = false;
     _currentDownloadingState = null;
+    isVerifyingCache.value = false;
+    streamProcessedTiles.value = 0;
 
     // Disable wake lock
     await WakelockPlus.disable();
@@ -850,11 +943,45 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (isComplete) {
       offlineMapDownloadProgress.value = 100.0;
 
-      // Persist download timestamp
+      // Persist download timestamp and clear any partial-download marker.
       final now = DateTime.now();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('offline_map_last_updated', now.toIso8601String());
+      await prefs.remove('offline_map_partial_state');
+      await prefs.remove('offline_map_partial_downloaded');
+      await prefs.remove('offline_map_partial_total');
+      hasPartialDownload.value = false;
+      // Reset in-memory counters too — otherwise a stale value lingers
+      // and mis-seeds the next Resume top-up pass.
+      partialDownloadedTiles.value = 0;
+      partialTotalTiles.value = 0;
       offlineMapLastUpdated.value = now;
+      // Update the displayed cached count from the stream's final value
+      // immediately. FMTC's store.stats.length sometimes lags the stream
+      // (writes pending flush), so checkOfflineMapAvailability below may
+      // still report the pre-completion count for a few seconds. Seeding
+      // from downloadedTiles.value keeps the UI accurate right away.
+      if (downloadedTiles.value > cachedTileCount.value) {
+        cachedTileCount.value = downloadedTiles.value;
+      }
+      // A "complete" event with zero failures means the region is fully
+      // cached; clear the failure count so the Settings UI's "X failed"
+      // badge disappears. If failures persist (e.g. tile server was
+      // throttling), the next Resume will report a fresh count and the
+      // badge re-appears.
+      if (failedTilesCount.value == 0) {
+        // already clean
+      }
+      // Also patch the per-state list so the multi-state caption is fresh.
+      final updated = downloadedStates
+          .map((s) => s.code == stateCode
+              ? (code: s.code, tiles: downloadedTiles.value)
+              : s)
+          .toList();
+      if (!updated.any((s) => s.code == stateCode)) {
+        updated.add((code: stateCode, tiles: downloadedTiles.value));
+      }
+      downloadedStates.assignAll(updated);
 
       const AndroidNotificationDetails androidDetails =
           AndroidNotificationDetails(
@@ -982,29 +1109,62 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  // ✅ Updated cancel method
   Future<void> cancelOfflineMapDownload() async {
     if (!isDownloadingOfflineMap.value) return;
+
+    _cancelCompleter = Completer<void>();
+    _downloadCancelledIntentionally = true;
+    isDownloadingOfflineMap.value = false;
+
+    // Capture everything synchronously before the first await.  A concurrent
+    // Resume tap can start a new download in the gap between awaits, so we
+    // must not touch live shared state after this point.
+    final capturedState = _currentDownloadingState;
+    final capturedDownloaded = downloadedTiles.value;
+    final capturedTotal = totalTiles.value;
+    _currentDownloadingState = null;
 
     try {
       await _downloadSubscription?.cancel();
       _downloadSubscription = null;
 
-      if (_currentDownloadingState != null) {
-        final store = FMTCStore('offline_tiles_$_currentDownloadingState');
-        await store.download.cancel();
+      if (capturedState != null) {
+        // Always persist to SharedPreferences so the partial state survives.
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('offline_map_partial_state', capturedState);
+        await prefs.setInt('offline_map_partial_downloaded', capturedDownloaded);
+        await prefs.setInt('offline_map_partial_total', capturedTotal);
 
-        await _cleanupDownload(_currentDownloadingState!, isCancelled: true);
+        // Guard all remaining work: if the user already tapped Resume and a
+        // new download is running, skip FMTC cancel and cleanup entirely to
+        // avoid killing the freshly started resume.
+        if (!isDownloadingOfflineMap.value) {
+          hasPartialDownload.value = true;
+          partialDownloadedTiles.value = capturedDownloaded;
+          partialTotalTiles.value = capturedTotal;
+
+          try {
+            await FMTCStore('offline_tiles_$capturedState').download.cancel();
+          } catch (e) {
+            log_print.log("FMTC cancel error (non-fatal): $e");
+          }
+
+          await _cleanupDownload(capturedState, isCancelled: true);
+
+          Get.snackbar(
+            "Download Cancelled",
+            "Offline map download has been cancelled",
+            backgroundColor: Colors.orange,
+            colorText: Colors.white,
+          );
+        }
       }
-
-      Get.snackbar(
-        "Download Cancelled",
-        "Offline map download has been cancelled",
-        backgroundColor: Colors.orange,
-        colorText: Colors.white,
-      );
     } catch (e) {
       log_print.log("Error cancelling download: $e");
+    } finally {
+      _cancelCompleter?.complete();
+      _cancelCompleter = null;
+      _downloadCancelledIntentionally = false;
     }
   }
 
@@ -1211,8 +1371,36 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
   // Add observable variable
   final hasOfflineMap = false.obs;
+  final hasPartialDownload = false.obs;
+  final RxInt partialDownloadedTiles = 0.obs;
+  final RxInt partialTotalTiles = 0.obs;
+  // Cached tile count for the currently-downloaded state's FMTC store.
+  // Refreshed by checkOfflineMapAvailability() so the Settings UI can
+  // show "Map downloaded · NC · 8500 tiles".
+  final RxInt cachedTileCount = 0.obs;
+  final RxString offlineMapStateCode = ''.obs;
+  // Live FMTC stream cumulative counts (only meaningful during a download).
+  // Used so the UI can show "Verifying 12345 / 77815 cached tiles" while
+  // the seeded counter sits frozen at 77815 waiting for the stream to
+  // catch up to the baseline.
+  final RxInt streamProcessedTiles = 0.obs;
+  final RxBool isVerifyingCache = false.obs;
+  // Number of tiles FMTC failed to fetch on the most recent (or current)
+  // download — shown alongside the cached count with a "Resume to retry"
+  // hint. Reset by _cleanupDownload(isComplete) only after successful
+  // completion; preserved on cancel/error so the user can see the count
+  // and act on it.
+  final RxInt failedTilesCount = 0.obs;
+  // Every state with a non-empty FMTC store. Populated by
+  // checkOfflineMapAvailability() so Settings can show all downloads,
+  // not just the one matching the user's current bounding-box.
+  // Each entry: (state code, tile count).
+  final RxList<({String code, int tiles})> downloadedStates =
+      <({String code, int tiles})>[].obs;
   final Rxn<DateTime> offlineMapLastUpdated = Rxn<DateTime>();
   StreamSubscription<DownloadProgress>? _downloadSubscription;
+  bool _downloadCancelledIntentionally = false;
+  Completer<void>? _cancelCompleter;
   final RxBool isDownloadingOfflineMap = false.obs;
   final RxDouble offlineMapDownloadProgress = 0.0.obs;
   final RxInt downloadedTiles = 0.obs;
@@ -1284,6 +1472,19 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     await fg.FlutterForegroundTask.stopService();
   }
 
+  // 50 US states + DC — kept in sync with getCurrentStateCode()'s
+  // stateBounds map. Iterated each time the Settings panel refreshes so
+  // the UI can list every state that has cached tiles, not just the one
+  // matching the user's current bounding-box.
+  static const List<String> _allStateCodes = [
+    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY',
+    'DC',
+  ];
+
   // Check on init
   Future<void> checkOfflineMapAvailability() async {
     hasOfflineMap.value = await isOfflineMapAvailable();
@@ -1292,7 +1493,72 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     if (raw != null) {
       offlineMapLastUpdated.value = DateTime.tryParse(raw);
     }
+    // Refresh cached tile count + state code so the Settings UI can show
+    // "Map downloaded · NC · 8500 tiles" without firing off another scan
+    // when the user opens the panel.
+    try {
+      final stateCode = await getCurrentStateCode();
+      if (stateCode != null) {
+        offlineMapStateCode.value = stateCode;
+        final store = FMTCStore('offline_tiles_$stateCode');
+        if (await store.manage.ready) {
+          cachedTileCount.value = (await store.stats.all).length;
+        } else {
+          cachedTileCount.value = 0;
+        }
+      }
+    } catch (_) {
+      // leave previous values intact on transient errors
+    }
+    // Discover every state with tiles cached so the Settings UI can show
+    // all downloads (e.g. user downloaded NC + NY + VA — caption should
+    // list all three even when standing in one of them).
+    try {
+      final found = <({String code, int tiles})>[];
+      for (final code in _allStateCodes) {
+        try {
+          final store = FMTCStore('offline_tiles_$code');
+          if (await store.manage.ready) {
+            final n = (await store.stats.all).length;
+            if (n > 0) found.add((code: code, tiles: n));
+          }
+        } catch (_) {}
+      }
+      downloadedStates.assignAll(found);
+      // hasOfflineMap mirrors "anything available", regardless of which
+      // state the user is currently standing in.
+      if (found.isNotEmpty) hasOfflineMap.value = true;
+    } catch (_) {}
+    // Detect partial (cancelled) download — store exists but never completed.
+    final partialState = prefs.getString('offline_map_partial_state');
+    if (partialState != null) {
+      final d = prefs.getInt('offline_map_partial_downloaded') ?? 0;
+      final t = prefs.getInt('offline_map_partial_total') ?? 0;
+      hasPartialDownload.value = t > 0 && d < t;
+      partialDownloadedTiles.value = d;
+      partialTotalTiles.value = t;
+    } else {
+      // Reset in-memory partial counters too. _cleanupDownload(isComplete)
+      // only clears SharedPreferences keys, leaving stale values in these
+      // RxInt observables — which then mis-seed the Resume top-up flow
+      // (e.g. seeded 5437 from a long-cancelled session even though the
+      // store actually holds 77 815 tiles).
+      hasPartialDownload.value = false;
+      partialDownloadedTiles.value = 0;
+      partialTotalTiles.value = 0;
+    }
   }
+
+  Future<void> resumeOfflineMapDownload() async {
+    // Wait for any in-progress cancel to fully finish (FMTC cancel + cleanup)
+    // before starting a new download, otherwise cleanup kills the new download.
+    if (_cancelCompleter != null) await _cancelCompleter!.future;
+    final prefs = await SharedPreferences.getInstance();
+    final stateCode = prefs.getString('offline_map_partial_state') ?? _getCurrentStateCode();
+    await downloadOfflineMapForState(stateCode, resume: true);
+  }
+
+  String _getCurrentStateCode() => 'NC';
 
   void initializeOnPageOpen() async {
     log_print.log("🔄 Initializing location on page open");
@@ -2810,15 +3076,40 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     final double lngMin = pos.longitude - delta;
     final double lngMax = pos.longitude + delta;
 
-    final appToken = dotenv.maybeGet('SOCRATA_APP_TOKEN') ?? '';
+    // `.env` is not bundled as a Flutter asset so dotenv may never initialize
+    // on device builds. maybeGet() still throws NotInitializedError on an
+    // uninitialized dotenv — guard with isInitialized.
+    final appToken = dotenv.isInitialized
+        ? (dotenv.maybeGet('SOCRATA_APP_TOKEN') ?? '')
+        : '';
 
+    // latitude/longitude are text columns in Socrata; '>' needs a ::number
+    // cast. The dataset has malformed rows with stray characters (°, O, o)
+    // that break the cast for the entire query, so filter those first via
+    // chained NOT LIKE. URL-encoding: '%' → %25, '°' → %C2%B0.
+    // Server-side `crossingposition='At Grade'` plus $select on 5 cols
+    // shave the response from ~3 MB to ~76 KB. $limit=1000 stays within
+    // Socrata's ~1024-row hard cap (beyond which the connection drops
+    // mid-stream, surfacing as FormatException on jsonDecode).
     final uri = Uri.parse(
       'https://data.transportation.gov/resource/vhwz-raag.json'
-      '?\$where=latitude>${latMin.toStringAsFixed(6)}'
-      ' AND latitude<${latMax.toStringAsFixed(6)}'
-      ' AND longitude>${lngMin.toStringAsFixed(6)}'
-      ' AND longitude<${lngMax.toStringAsFixed(6)}'
-      '&\$limit=10000',
+      '?\$select=crossingid,latitude,longitude,street,revisiondate'
+      "&\$where=crossingposition='At Grade'"
+      " AND latitude NOT LIKE '%25%C2%B0%25'"
+      " AND latitude NOT LIKE '%25O%25'"
+      " AND latitude NOT LIKE '%25o%25'"
+      " AND longitude NOT LIKE '%25%C2%B0%25'"
+      " AND longitude NOT LIKE '%25O%25'"
+      " AND longitude NOT LIKE '%25o%25'"
+      ' AND latitude::number>${latMin.toStringAsFixed(6)}'
+      ' AND latitude::number<${latMax.toStringAsFixed(6)}'
+      ' AND longitude::number>${lngMin.toStringAsFixed(6)}'
+      ' AND longitude::number<${lngMax.toStringAsFixed(6)}'
+      // Socrata reliably caps response at ~1024 rows regardless of $limit
+      // and drops the connection mid-row beyond that, causing
+      // FormatException on jsonDecode. Cap at 1000 — a 25 km bbox has
+      // well under that many at-grade crossings for any US region.
+      '&\$limit=1000',
     );
 
     try {
@@ -2834,8 +3125,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
         for (final e in data) {
           if (e['latitude'] == null || e['longitude'] == null) continue;
-          if ((e['crossingposition'] ?? '').toString().trim().toLowerCase() !=
-              'at grade') continue;
+          // crossingposition='At Grade' is now filtered server-side via
+          // $where, so no client-side filter is needed here.
 
           // Deduplicate by crossingid (authoritative FRA key)
           final id = (e['crossingid'] as String? ?? '').trim();
@@ -2869,6 +3160,15 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
             'longitude': c.longitude ?? '0',
             'street': c.street ?? 'Railway Crossing',
           }).toList(),
+        ));
+
+        // P3 — (re)register the nearest crossings as OS wake-geofences now that
+        // both a location and a fresh crossing list are in hand. Runs in the
+        // main isolate where NativeGeofenceManager is initialized.
+        unawaited(GeofenceSafetyNetService.syncGeofences(
+          pos.latitude,
+          pos.longitude,
+          force: true,
         ));
       } else {
         log_print.log('❌ FRA fetch failed: ${res.statusCode}');
@@ -2948,6 +3248,45 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //     throw e;
   //   }
   // }
+  /// Nominatim (OpenStreetMap) autocomplete/geocoder — replaces the native
+  /// Android Geocoder (`locationFromAddress`) which was returning empty on
+  /// partial queries and silently failing on full ones. Nominatim's TOS
+  /// requires a descriptive User-Agent and caps at ~1 req/sec.
+  Future<List<GeocodeResult>> _geocodeViaNominatim(String query,
+      {int limit = 5}) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return [];
+    try {
+      final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+        'q': trimmed,
+        'format': 'json',
+        'limit': '$limit',
+        'addressdetails': '0',
+        'countrycodes': 'us',
+      });
+      final res = await http.get(uri, headers: {
+        'User-Agent': 'RXrail/1.0 (railway crossing alert app)',
+        'Accept-Language': 'en',
+      }).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) {
+        log_print.log('❌ Nominatim ${res.statusCode}');
+        return [];
+      }
+      final data = jsonDecode(res.body) as List<dynamic>;
+      return data.map<GeocodeResult>((e) {
+        final m = e as Map<String, dynamic>;
+        return GeocodeResult(
+          double.tryParse(m['lat']?.toString() ?? '') ?? 0.0,
+          double.tryParse(m['lon']?.toString() ?? '') ?? 0.0,
+          m['display_name']?.toString() ?? '',
+        );
+      }).toList();
+    } catch (e) {
+      log_print.log('❌ Nominatim error: $e');
+      return [];
+    }
+  }
+
   Future<void> findRoute(String toAddress) async {
     try {
       routeCoordinates.clear();
@@ -2967,18 +3306,17 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         timestamp: DateTime.now(),
       );
 
-      final toLocations = await geocoding.locationFromAddress(toAddress);
-      if (toLocations.isEmpty) {
+      final results = await _geocodeViaNominatim(toAddress, limit: 1);
+      if (results.isEmpty) {
         throw Exception("Could not find destination address");
       }
+      final toLoc = results.first;
       destinationGeocoded =
-          'Destination geocoded to: ${toLocations.first.latitude}, ${toLocations.first.longitude}';
+          'Destination geocoded to: ${toLoc.lat}, ${toLoc.lng}';
       log_print.log(destinationGeocoded);
 
-      final toLoc = toLocations.first;
-
       fromLocation.value = LatLng(fromLoc.latitude, fromLoc.longitude);
-      toLocation.value = LatLng(toLoc.latitude, toLoc.longitude);
+      toLocation.value = LatLng(toLoc.lat, toLoc.lng);
       destinationAddress.value = toAddress;
       await _savePreferences();
 
@@ -4223,7 +4561,10 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         '?overview=full&steps=true&geometries=polyline',
       );
 
-      final response = await http.get(url);
+      // OSRM's public demo server is occasionally slow; without a timeout the
+      // caller's spinner would hang indefinitely.
+      final response =
+          await http.get(url).timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) {
         throw Exception("Failed to get route: ${response.statusCode}");
       }
@@ -5863,8 +6204,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
     final toController = TextEditingController(text: destinationAddress.value);
     final RxBool isLoading = false.obs;
-    final RxList<place_mark.Location> locationSuggestions =
-        <place_mark.Location>[].obs;
+    final RxList<GeocodeResult> locationSuggestions = <GeocodeResult>[].obs;
     final RxString currentLocationText = 'Getting location...'.obs;
 
     // Controllers for home/work dialogs
@@ -5876,7 +6216,16 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     final RxString destinationWarningText =
         'Please enter a more specific address (min 5 characters)'.obs;
 
+    // Debounce timer + token to throttle Nominatim requests. Without this,
+    // typing a 15-char address fires ~12 requests in 3 s and Nominatim's
+    // 1 req/sec TOS bans the device IP with HTTP 429 for ~1 hour, killing
+    // autocomplete entirely.
+    Timer? suggestDebounce;
+    int suggestSeq = 0;
+
     Future<void> updateLocationSuggestions(String query) async {
+      suggestDebounce?.cancel();
+
       if (query.isEmpty) {
         locationSuggestions.clear();
         showDestinationWarning.value = true;
@@ -5890,12 +6239,13 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         showDestinationWarning.value = false;
       }
 
-      try {
-        final locations = await place_mark.locationFromAddress(query);
-        locationSuggestions.assignAll(locations);
-      } catch (e) {
-        locationSuggestions.clear();
-      }
+      final mySeq = ++suggestSeq;
+      suggestDebounce = Timer(const Duration(milliseconds: 400), () async {
+        final results = await _geocodeViaNominatim(query);
+        // Discard stale results if the user kept typing past this request.
+        if (mySeq != suggestSeq) return;
+        locationSuggestions.assignAll(results);
+      });
     }
 
     Future<void> refreshCurrentLocationInSheet() async {
@@ -6521,40 +6871,24 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
                                       shrinkWrap: true,
                                       itemCount: locationSuggestions.length,
                                       itemBuilder: (context, index) {
-                                        final location =
+                                        final result =
                                             locationSuggestions[index];
-                                        return FutureBuilder<
-                                          List<geocoding.Placemark>
-                                        >(
-                                          future: geocoding
-                                              .placemarkFromCoordinates(
-                                                location.latitude,
-                                                location.longitude,
-                                              ),
-                                          builder: (context, snapshot) {
-                                            if (!snapshot.hasData)
-                                              return SizedBox();
-                                            final placeMark =
-                                                snapshot.data!.first;
-                                            final address =
-                                                "${placeMark.street ?? ''}, ${placeMark.locality ?? ''}, ${placeMark.administrativeArea ?? ''}";
-                                            return ListTile(
-                                              leading: Icon(
-                                                Icons.location_on,
-                                                color: Color(0xFFFFC107),
-                                              ),
-                                              title: Text(
-                                                address,
-                                                style: styleW500(size: 12.sp),
-                                              ),
-                                              onTap: () {
-                                                toController.text = address;
-                                                locationSuggestions.clear();
-                                                FocusScope.of(
-                                                  context,
-                                                ).unfocus();
-                                              },
-                                            );
+                                        return ListTile(
+                                          leading: Icon(
+                                            Icons.location_on,
+                                            color: Color(0xFFFFC107),
+                                          ),
+                                          title: Text(
+                                            result.displayName,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: styleW500(size: 12.sp),
+                                          ),
+                                          onTap: () {
+                                            toController.text =
+                                                result.displayName;
+                                            locationSuggestions.clear();
+                                            FocusScope.of(context).unfocus();
                                           },
                                         );
                                       },
@@ -7871,8 +8205,10 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
               mapController.rotate(-bearing);
             }
             log_print.log('🧭 Bearing updated: ${bearing.toStringAsFixed(1)}°');
-          } else if (speed < 0.5 && !isHeadingUp.value == false) {
-            // Reset to north when stopped
+          } else if (speed < 1.0 && isHeadingUp.value) {
+            // Reset to north when slowing or stopped in heading-up mode.
+            // Threshold matches the activate threshold (1.0) to avoid a
+            // dead-band where the map rotation freezes on deceleration.
             mapController.rotate(0);
             mapRotation.value = 0;
           }
@@ -7882,6 +8218,19 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           // Save for background
           _saveLocationToPrefs();
 
+          // Keep the user marker on screen while driving — recenter on every
+          // GPS fix unless the user has manually zoomed/panned. Previously
+          // this only ran inside `if (isNavigating.value)`, so the cursor
+          // drifted off-screen whenever no Find Route was active.
+          if (!hasUserAdjustedZoom.value) {
+            isProgrammaticMove.value = true;
+            mapController.move(
+              LatLng(position.latitude, position.longitude),
+              currentZoom.value,
+            );
+            isProgrammaticMove.value = false;
+          }
+
           // ✅✅✅ MOST IMPORTANT: CHECK CROSSINGS
           log_print.log('🔍 CALLING checkNearbyCrossings()...');
           checkNearbyCrossings();
@@ -7889,15 +8238,6 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           // Navigation updates
           if (isNavigating.value) {
             log_print.log('🚗 Navigation mode active');
-
-            if (!hasUserAdjustedZoom.value) {
-              isProgrammaticMove.value = true;
-              mapController.move(
-                LatLng(position.latitude, position.longitude),
-                18,
-              );
-              isProgrammaticMove.value = false;
-            }
 
             _updateRouteProgress();
             _checkProximityToCrossings();

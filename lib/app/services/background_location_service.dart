@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -335,6 +336,10 @@ class LocationTaskHandler extends TaskHandler {
   final FlutterLocalNotificationsPlugin _notifPlugin =
       FlutterLocalNotificationsPlugin();
   bool _notifInitialized = false;
+  // Spoken alert on the navigation-guidance stream: not muted by ringer
+  // mode, routed to the car head unit, ducks music (Waze-style).
+  final FlutterTts _tts = FlutterTts();
+  bool _ttsReady = false;
 
   Position? _lastPosition;
   DateTime? _lastFraFetch;
@@ -359,6 +364,13 @@ class LocationTaskHandler extends TaskHandler {
     await _notifPlugin
         .initialize(const InitializationSettings(android: androidInit));
     _notifInitialized = true;
+    try {
+      await _tts.setAudioAttributesForNavigation();
+      await _tts.setSpeechRate(0.5);
+      _ttsReady = true;
+    } catch (e) {
+      await TestLogger.log('⚠️ TTS init failed: $e', tag: 'BG');
+    }
 
     _positionStream = Geolocator.getPositionStream(
       locationSettings: locationSettings,
@@ -396,6 +408,26 @@ class LocationTaskHandler extends TaskHandler {
     if (_checkInProgress) return;
     _checkInProgress = true;
     _checkProximity(source: 'TIMER').whenComplete(() => _checkInProgress = false);
+  }
+
+  /// Voice alert; honours the warning-sound toggle. Never throws into the
+  /// proximity tick — a TTS failure must not cost the visual alert.
+  Future<void> _speakAlert(String street, double distance, String source) async {
+    if (!_ttsReady) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool('isWarningSoundEnabled') ?? true)) return;
+    final where = street.trim().isEmpty || street == 'Railway Crossing'
+        ? ''
+        : ' at ${street.toLowerCase()}';
+    try {
+      await _tts.stop();
+      await _tts.speak(
+        'Railway crossing ahead$where, ${distance.round()} meters',
+        focus: true,
+      );
+    } catch (e) {
+      await TestLogger.log('[$source] ⚠️ TTS failed: $e', tag: 'BG');
+    }
   }
 
   Future<void> _checkProximity({String source = 'TIMER'}) async {
@@ -568,6 +600,7 @@ class LocationTaskHandler extends TaskHandler {
             final notifId = await _showCrossingAlert(
                 _notifPlugin, bestId, bestStreet!, bestDist);
             _activeNotifIds[bestId] = notifId;
+            await _speakAlert(bestStreet, bestDist, source);
           } else {
             await TestLogger.log(
               '[$source] ⚠️ alert SUPPRESSED: _notifInitialized=false',

@@ -33,6 +33,7 @@ import '../../../utils/app_color.dart';
 import '../../../utils/text_style.dart';
 import '../../setting/controllers/setting_controller.dart';
 import 'dart:developer' as log_print;
+import 'package:RXrail/app/services/test_logger.dart';
 
 // Add this TOP-LEVEL function outside any class (usually in main.dart or a separate file)
 @pragma('vm:entry-point')
@@ -354,6 +355,68 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       }
     }
     return null;
+  }
+
+  static const String _kOfflineMapOfferedKey = 'offline_map_offered';
+  int _offerAttempts = 0;
+
+  /// One-time offer to download the offline map for the user's state.
+  /// Safe to call repeatedly: no-ops once answered, once a map exists, or
+  /// while another dialog is up. The flag is set only on an answer, so a
+  /// dialog torn down by a navigation (OEM settings detour) re-offers on
+  /// the next resume.
+  Future<void> maybeOfferOfflineMap() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_kOfflineMapOfferedKey) ?? false) return;
+    final hasMap = await isOfflineMapAvailable();
+    await TestLogger.log(
+        'offer check: hasMap=$hasMap downloading=${isDownloadingOfflineMap.value} '
+        'dialogOpen=${Get.isDialogOpen} ctx=${Get.context != null} attempt=$_offerAttempts',
+        tag: 'UI');
+    if (hasMap) {
+      await prefs.setBool(_kOfflineMapOfferedKey, true);
+      return;
+    }
+    // Blocked by onboarding/permission dialogs or a not-yet-mounted overlay:
+    // retry for ~2 min, then leave it to the next resume/launch.
+    final blocked = isDownloadingOfflineMap.value ||
+        (Get.isDialogOpen ?? false) ||
+        Get.context == null;
+    if (blocked) {
+      if (_offerAttempts++ < 12) {
+        Future.delayed(const Duration(seconds: 10), maybeOfferOfflineMap);
+      }
+      return;
+    }
+    await TestLogger.log('🗺️ offering offline map download', tag: 'UI');
+
+    Future<void> answer(bool download) async {
+      await prefs.setBool(_kOfflineMapOfferedKey, true);
+      Get.back();
+      if (download) await downloadOfflineMapByCurrentState();
+    }
+
+    await Get.dialog(
+      AlertDialog(
+        title: const Text('Download offline map?'),
+        content: const Text(
+          'Store your state\'s map on this device for smoother navigation '
+          'and reliable crossing alerts without a signal. Uses Wi-Fi or '
+          'mobile data now; you can manage it later in Settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => answer(false),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () => answer(true),
+            child: const Text('Download'),
+          ),
+        ],
+      ),
+      barrierDismissible: false,
+    );
   }
 
   Future<void> downloadOfflineMapByCurrentState() async {
@@ -1891,6 +1954,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   // In the _onAppResumed method:
   void _onAppResumed() {
     log_print.log("App resumed - stopping background service");
+    maybeOfferOfflineMap();
 
     stopBackgroundDebugTimer();
 

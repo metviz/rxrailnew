@@ -3,6 +3,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 
+import '../../../modules/crossing/controllers/crossing_controller.dart';
 import '../../../modules/news/controllers/news_controller.dart';
 import '../../../routes/app_pages.dart';
 import '../../../utils/permission_helper.dart';
@@ -32,6 +33,11 @@ class BottomNavigationbarController extends GetxController {
     // too early in the transition gets the dialog swallowed.
     Future.delayed(const Duration(milliseconds: 1500), () {
       PermissionHelper.requestOemAutoStart();
+    });
+    // First-run offline-map offer. Also re-fired from
+    // CrossingController._onAppResumed for the return from the OEM detour.
+    Future.delayed(const Duration(seconds: 3), () {
+      Get.find<CrossingController>().maybeOfferOfflineMap();
     });
   }
   /// ✅ Fetch current location and get state abbreviation (like "NC")

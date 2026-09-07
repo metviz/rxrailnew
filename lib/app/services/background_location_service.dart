@@ -216,6 +216,37 @@ double _haversineDistanceMeters(
   return r * 2 * math.atan2(math.sqrt(a), math.sqrt((1 - a).clamp(0.0, 1.0)));
 }
 
+/// Initial bearing (degrees, 0-360) from point 1 to point 2.
+double bearingDegrees(double lat1, double lon1, double lat2, double lon2) {
+  final phi1 = lat1 * math.pi / 180;
+  final phi2 = lat2 * math.pi / 180;
+  final dLon = (lon2 - lon1) * math.pi / 180;
+  final y = math.sin(dLon) * math.cos(phi2);
+  final x = math.cos(phi1) * math.sin(phi2) -
+      math.sin(phi1) * math.cos(phi2) * math.cos(dLon);
+  return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
+}
+
+/// Minimum speed at which GPS heading is trustworthy enough to gate on.
+const double _kHeadingGateMinSpeed = 3.0; // m/s (~11 km/h)
+
+/// Half-angle of the "ahead" cone. Wide enough for curved approaches,
+/// narrow enough to reject a track running alongside the road (90°).
+const double _kAheadHalfAngle = 60.0;
+
+/// True when the crossing lies roughly ahead of the direction of travel.
+/// Below driving speed (or without a heading) everything passes — walking
+/// users get the alert regardless of orientation.
+bool isCrossingAhead(Position position, double lat, double lng) {
+  if (position.speed < _kHeadingGateMinSpeed) return true;
+  final heading = position.heading;
+  if (heading.isNaN || heading < 0) return true;
+  final bearing =
+      bearingDegrees(position.latitude, position.longitude, lat, lng);
+  final diff = ((bearing - heading + 540) % 360) - 180;
+  return diff.abs() <= _kAheadHalfAngle;
+}
+
 /// Fire a high-priority crossing alert from within the background isolate.
 Future<int> _showCrossingAlert(
   FlutterLocalNotificationsPlugin plugin,
@@ -235,19 +266,25 @@ Future<int> _showCrossingAlert(
   // time; later mutations via AndroidNotificationDetails are ignored. Route
   // through one of four pre-configured channels so the user's toggles take
   // effect on the next alert.
+  //
+  // `_v2` channels use the ALARM audio usage: the notification stream is
+  // muted whenever the phone is in vibrate/silent mode (S26 field logs:
+  // 18 alerts fired, none audible, ringer=VIBRATE) and is not routed to a
+  // car head unit. The alarm stream ignores ringer mode and plays over
+  // Bluetooth A2DP.
   final String channelId;
   final String channelName;
   if (soundEnabled && vibrationEnabled) {
-    channelId = 'railway_crossing_sound_vibe';
+    channelId = 'railway_crossing_sound_vibe_v2';
     channelName = 'Railway Crossings (Sound + Vibration)';
   } else if (soundEnabled) {
-    channelId = 'railway_crossing_sound';
+    channelId = 'railway_crossing_sound_v2';
     channelName = 'Railway Crossings (Sound)';
   } else if (vibrationEnabled) {
-    channelId = 'railway_crossing_vibe';
+    channelId = 'railway_crossing_vibe_v2';
     channelName = 'Railway Crossings (Vibration)';
   } else {
-    channelId = 'railway_crossing_silent';
+    channelId = 'railway_crossing_silent_v2';
     channelName = 'Railway Crossings (Silent)';
   }
 
@@ -257,6 +294,7 @@ Future<int> _showCrossingAlert(
     channelDescription: 'High priority alerts for nearby railway crossings',
     importance: Importance.high,
     priority: Priority.high,
+    audioAttributesUsage: AudioAttributesUsage.alarm,
     enableLights: true,
     enableVibration: vibrationEnabled,
     playSound: soundEnabled,
@@ -464,6 +502,11 @@ class LocationTaskHandler extends TaskHandler {
       double nearestDist = double.infinity;
       String nearestId = '';
       String nearestStreet = '';
+      final List<String> inRange = [];
+      String? bestId;
+      String? bestStreet;
+      double bestDist = double.infinity;
+      int gated = 0;
 
       for (final crossing in crossings) {
         final id = crossing['crossingid'] as String? ?? '';
@@ -490,31 +533,53 @@ class LocationTaskHandler extends TaskHandler {
         if (distance <= threshold * 1.2) stillNear.add(id);
 
         if (distance <= threshold) {
-          final count = _alertCount[id] ?? 0;
-          if (count < _maxAlertsPerVisit) {
-            _alertCount[id] = count + 1;
-            await TestLogger.log(
-              '[$source] 🔔 ALERT #${count + 1} — $street ${distance.round()}m '
-              '(acc=${position.accuracy.round()}m spd=${position.speed.toStringAsFixed(1)}m/s)',
-              tag: 'BG',
-            );
-            if (_notifInitialized) {
-              final notifId =
-                  await _showCrossingAlert(_notifPlugin, id, street, distance);
-              _activeNotifIds[id] = notifId;
-            } else {
-              await TestLogger.log(
-                '[$source] ⚠️ alert SUPPRESSED: _notifInitialized=false',
-                tag: 'BG',
-              );
-            }
+          inRange.add(id);
+          // Heading gate: at driving speed only crossings roughly ahead
+          // count. Rejects crossings on a parallel track/spur beside the
+          // road (S26 logs: alerts at 173-211m for spurs never crossed).
+          if (!isCrossingAhead(position, lat, lng)) {
+            gated++;
+            continue;
+          }
+          if (distance < bestDist) {
+            bestDist = distance;
+            bestId = id;
+            bestStreet = street;
+          }
+        }
+      }
+
+      // One alert per tick for the nearest crossing ahead; every crossing
+      // in range is consumed so a cluster (duplicate FRA rows, adjacent
+      // pedestrian/private crossings) yields one alert, not three.
+      if (bestId != null) {
+        final count = _alertCount[bestId] ?? 0;
+        if (count < _maxAlertsPerVisit) {
+          for (final id in inRange) {
+            _alertCount[id] = math.max(_alertCount[id] ?? 0, 1);
+          }
+          await TestLogger.log(
+            '[$source] 🔔 ALERT #${count + 1} — $bestStreet ${bestDist.round()}m '
+            '(acc=${position.accuracy.round()}m spd=${position.speed.toStringAsFixed(1)}m/s '
+            'hdg=${position.heading.round()} consumed=${inRange.length})',
+            tag: 'BG',
+          );
+          if (_notifInitialized) {
+            final notifId = await _showCrossingAlert(
+                _notifPlugin, bestId, bestStreet!, bestDist);
+            _activeNotifIds[bestId] = notifId;
           } else {
             await TestLogger.log(
-              '[$source] 🔕 alert capped (${_maxAlertsPerVisit}/visit) — $street '
-              '${distance.round()}m',
+              '[$source] ⚠️ alert SUPPRESSED: _notifInitialized=false',
               tag: 'BG',
             );
           }
+        } else {
+          await TestLogger.log(
+            '[$source] 🔕 alert capped (${_maxAlertsPerVisit}/visit) — $bestStreet '
+            '${bestDist.round()}m',
+            tag: 'BG',
+          );
         }
       }
 
@@ -523,11 +588,16 @@ class LocationTaskHandler extends TaskHandler {
           _alertCount.keys.where((id) => !stillNear.contains(id)).toList();
       for (final id in departed) {
         final notifId = _activeNotifIds.remove(id);
-        if (notifId != null) {
-          await _notifPlugin.cancel(notifId);
-          await TestLogger.log('[$source] 🔕 departed crossing $id', tag: 'BG');
-        }
         _alertCount.remove(id);
+        if (notifId != null) {
+          try {
+            await _notifPlugin.cancel(notifId);
+            await TestLogger.log('[$source] 🔕 departed crossing $id', tag: 'BG');
+          } catch (e) {
+            await TestLogger.log(
+                '[$source] ⚠️ cancel failed for $id: $e', tag: 'BG');
+          }
+        }
       }
 
       final nearestText = nearestDist.isFinite
@@ -540,6 +610,7 @@ class LocationTaskHandler extends TaskHandler {
         'pos=${position.latitude.toStringAsFixed(5)},${position.longitude.toStringAsFixed(5)} '
         'acc=${position.accuracy.round()}m '
         'spd=${position.speed.toStringAsFixed(1)}m/s '
+        'hdg=${position.heading.round()} gated=$gated '
         'notifInit=$_notifInitialized',
         tag: 'BG',
       );

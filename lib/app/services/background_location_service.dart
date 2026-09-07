@@ -338,8 +338,11 @@ class LocationTaskHandler extends TaskHandler {
   bool _notifInitialized = false;
   // Spoken alert on the navigation-guidance stream: not muted by ringer
   // mode, routed to the car head unit, ducks music (Waze-style).
-  final FlutterTts _tts = FlutterTts();
-  bool _ttsReady = false;
+  // Constructed in onStart: the FlutterTts constructor registers a method
+  // channel handler, which needs the isolate's ServicesBinding — not yet
+  // initialised when the TaskHandler itself is built (crashed the FGS
+  // isolate at startup with "Null check operator used on a null value").
+  FlutterTts? _tts;
 
   Position? _lastPosition;
   DateTime? _lastFraFetch;
@@ -365,9 +368,11 @@ class LocationTaskHandler extends TaskHandler {
         .initialize(const InitializationSettings(android: androidInit));
     _notifInitialized = true;
     try {
-      await _tts.setAudioAttributesForNavigation();
-      await _tts.setSpeechRate(0.5);
-      _ttsReady = true;
+      final tts = FlutterTts();
+      await tts.setAudioAttributesForNavigation();
+      await tts.setSpeechRate(0.5);
+      _tts = tts;
+      await TestLogger.log('🔊 TTS ready (navigation stream)', tag: 'BG');
     } catch (e) {
       await TestLogger.log('⚠️ TTS init failed: $e', tag: 'BG');
     }
@@ -413,15 +418,16 @@ class LocationTaskHandler extends TaskHandler {
   /// Voice alert; honours the warning-sound toggle. Never throws into the
   /// proximity tick — a TTS failure must not cost the visual alert.
   Future<void> _speakAlert(String street, double distance, String source) async {
-    if (!_ttsReady) return;
+    final tts = _tts;
+    if (tts == null) return;
     final prefs = await SharedPreferences.getInstance();
     if (!(prefs.getBool('isWarningSoundEnabled') ?? true)) return;
     final where = street.trim().isEmpty || street == 'Railway Crossing'
         ? ''
         : ' at ${street.toLowerCase()}';
     try {
-      await _tts.stop();
-      await _tts.speak(
+      await tts.stop();
+      await tts.speak(
         'Railway crossing ahead$where, ${distance.round()} meters',
         focus: true,
       );

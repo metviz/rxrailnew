@@ -3192,24 +3192,44 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
             '(around ${pos.latitude.toStringAsFixed(4)}, '
             '${pos.longitude.toStringAsFixed(4)})');
 
-        // Persist to SharedPreferences for background isolate
-        unawaited(CrossingCacheService.saveCrossings(
-          nearbyLocations.map((c) => {
-            'crossingid': c.crossingid ?? '',
-            'latitude': c.latitude ?? '0',
-            'longitude': c.longitude ?? '0',
-            'street': c.street ?? 'Railway Crossing',
-          }).toList(),
-        ));
+        // The background isolate alerts from this cache and the geofences
+        // wake it, so only a fetch around the user may replace them — not
+        // one for wherever the map was panned (that left the isolate
+        // alerting on the viewed area). Raw rows, not the id-deduplicated
+        // list: FRA reuses some ids for distinct locations.
+        final user = userPosition.value;
+        final aroundUser = user == null ||
+            _calculateDistance(user.latitude, user.longitude, pos.latitude,
+                    pos.longitude) <
+                5.0;
+        if (aroundUser) {
+          unawaited(CrossingCacheService.saveCrossings([
+            for (final e in data)
+              if (e['latitude'] != null &&
+                  e['longitude'] != null &&
+                  (e['crossingid'] as String? ?? '').trim().isNotEmpty)
+                {
+                  'crossingid': (e['crossingid'] as String).trim(),
+                  'latitude': e['latitude'].toString(),
+                  'longitude': e['longitude'].toString(),
+                  'street': e['street'] ?? 'Railway Crossing',
+                },
+          ]));
+          // Mirror the isolate's own fetch centre so its 15 km drift
+          // check measures from where this cache was built.
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setDouble('bg_last_fetch_lat', pos.latitude);
+          await prefs.setDouble('bg_last_fetch_lng', pos.longitude);
 
-        // P3 — (re)register the nearest crossings as OS wake-geofences now that
-        // both a location and a fresh crossing list are in hand. Runs in the
-        // main isolate where NativeGeofenceManager is initialized.
-        unawaited(GeofenceSafetyNetService.syncGeofences(
-          pos.latitude,
-          pos.longitude,
-          force: true,
-        ));
+          // P3 — (re)register the nearest crossings as OS wake-geofences now that
+          // both a location and a fresh crossing list are in hand. Runs in the
+          // main isolate where NativeGeofenceManager is initialized.
+          unawaited(GeofenceSafetyNetService.syncGeofences(
+            pos.latitude,
+            pos.longitude,
+            force: true,
+          ));
+        }
       } else {
         log_print.log('❌ FRA fetch failed: $failedStatus');
         errorMessage.value = 'Failed to fetch crossing data ($failedStatus)';

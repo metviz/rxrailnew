@@ -715,86 +715,49 @@ class LocationTaskHandler extends TaskHandler {
     await prefs.setDouble('bg_last_fetch_lat', position.latitude);
     await prefs.setDouble('bg_last_fetch_lng', position.longitude);
     try {
-      const double delta = 0.225; // ~25 km
-      final latMin = position.latitude - delta;
-      final latMax = position.latitude + delta;
-      final lngMin = position.longitude - delta;
-      final lngMax = position.longitude + delta;
-
-      // Uri.parse avoids Uri.https() percent-encoding '$' → '%24'. Latitude
-      // and longitude are stored as text in Socrata, so '>' needs a
-      // ::number cast. The dataset has a handful of malformed rows whose
-      // text contains stray characters (e.g. "29.303213°", "42.922107O")
-      // that break the cast for the *entire* query — filter them out
-      // first with chained NOT LIKE. In the URL, '%' (SoQL LIKE wildcard)
-      // must be encoded as %25 and '°' as %C2%B0.
-      //
-      // Server-side filter crossingposition='At Grade' AND $select shave the
-      // 3 MB+ default response down to ~76 KB. $limit=1000 stays within the
-      // ~1024-row hard cap Socrata enforces (anything beyond that drops the
-      // connection mid-stream — see FormatException history in commit log).
-      final uri = Uri.parse(
-        'https://data.transportation.gov/resource/vhwz-raag.json'
-        '?\$select=crossingid,latitude,longitude,street'
-        "&\$where=crossingposition='At Grade'"
-        " AND latitude NOT LIKE '%25%C2%B0%25'"
-        " AND latitude NOT LIKE '%25O%25'"
-        " AND latitude NOT LIKE '%25o%25'"
-        " AND longitude NOT LIKE '%25%C2%B0%25'"
-        " AND longitude NOT LIKE '%25O%25'"
-        " AND longitude NOT LIKE '%25o%25'"
-        ' AND latitude::number>${latMin.toStringAsFixed(6)}'
-        ' AND latitude::number<${latMax.toStringAsFixed(6)}'
-        ' AND longitude::number>${lngMin.toStringAsFixed(6)}'
-        ' AND longitude::number<${lngMax.toStringAsFixed(6)}'
-        // Socrata reliably caps the response at ~1024 rows even with
-        // $limit=10000, dropping the connection mid-row beyond that. Cap
-        // at 1000 so the JSON body always parses cleanly. A 25 km bbox
-        // produces well under that for any US region.
-        '&\$limit=1000',
-      );
-
       // Stream the body via Client().send() so we can apply a generous read
       // timeout independent of header timeout — http.get's single timeout
       // covers the full request/response lifecycle and was getting tripped
       // on slow cellular connections, leaving us with a half-read body.
+      final crossings = <Map<String, dynamic>>[];
       final client = http.Client();
-      http.StreamedResponse streamed;
-      String body;
       try {
-        streamed = await client
-            .send(http.Request('GET', uri))
-            .timeout(const Duration(seconds: 30));
-        if (streamed.statusCode != 200) {
-          final preview =
-              await streamed.stream.bytesToString().timeout(
-                  const Duration(seconds: 5),
-                  onTimeout: () => '');
-          await TestLogger.log(
-              '[BG] FRA fetch failed: ${streamed.statusCode} — '
-              '${preview.length > 200 ? preview.substring(0, 200) : preview}',
-              tag: 'BG');
-          return [];
+        for (var page = 0; page < kFraMaxPages; page++) {
+          final streamed = await client
+              .send(http.Request('GET',
+                  fraCrossingsUri(position.latitude, position.longitude,
+                      page: page)))
+              .timeout(const Duration(seconds: 30));
+          if (streamed.statusCode != 200) {
+            final preview =
+                await streamed.stream.bytesToString().timeout(
+                    const Duration(seconds: 5),
+                    onTimeout: () => '');
+            await TestLogger.log(
+                '[BG] FRA fetch failed: ${streamed.statusCode} — '
+                '${preview.length > 200 ? preview.substring(0, 200) : preview}',
+                tag: 'BG');
+            return [];
+          }
+          final body = await streamed.stream
+              .bytesToString()
+              .timeout(const Duration(seconds: 45));
+          final data = jsonDecode(body) as List<dynamic>;
+          for (final e in data) {
+            if (e['latitude'] == null || e['longitude'] == null) continue;
+            final id = (e['crossingid'] as String? ?? '').trim();
+            if (id.isEmpty) continue;
+            crossings.add({
+              'crossingid': id,
+              'latitude': e['latitude'].toString(),
+              'longitude': e['longitude'].toString(),
+              'street': e['street'] ?? 'Railway Crossing',
+            });
+          }
+          if (data.length < kFraPageSize) break;
         }
-        body = await streamed.stream
-            .bytesToString()
-            .timeout(const Duration(seconds: 45));
       } finally {
         client.close();
-      }
-
-      final data = jsonDecode(body) as List<dynamic>;
-      final crossings = <Map<String, dynamic>>[];
-      for (final e in data) {
-        if (e['latitude'] == null || e['longitude'] == null) continue;
-        final id = (e['crossingid'] as String? ?? '').trim();
-        if (id.isEmpty) continue;
-        crossings.add({
-          'crossingid': id,
-          'latitude': e['latitude'].toString(),
-          'longitude': e['longitude'].toString(),
-          'street': e['street'] ?? 'Railway Crossing',
-        });
       }
 
       await CrossingCacheService.saveCrossings(crossings);

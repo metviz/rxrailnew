@@ -3133,13 +3133,6 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
             : null);
     if (pos == null) return;
 
-    // ~0.225° ≈ 25 km at mid-latitudes — covers enough road ahead at any speed
-    const double delta = 0.225;
-    final double latMin = pos.latitude - delta;
-    final double latMax = pos.latitude + delta;
-    final double lngMin = pos.longitude - delta;
-    final double lngMax = pos.longitude + delta;
-
     // `.env` is not bundled as a Flutter asset so dotenv may never initialize
     // on device builds. maybeGet() still throws NotInitializedError on an
     // uninitialized dotenv — guard with isInitialized.
@@ -3147,44 +3140,27 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         ? (dotenv.maybeGet('SOCRATA_APP_TOKEN') ?? '')
         : '';
 
-    // latitude/longitude are text columns in Socrata; '>' needs a ::number
-    // cast. The dataset has malformed rows with stray characters (°, O, o)
-    // that break the cast for the entire query, so filter those first via
-    // chained NOT LIKE. URL-encoding: '%' → %25, '°' → %C2%B0.
-    // Server-side `crossingposition='At Grade'` plus $select on 5 cols
-    // shave the response from ~3 MB to ~76 KB. $limit=1000 stays within
-    // Socrata's ~1024-row hard cap (beyond which the connection drops
-    // mid-stream, surfacing as FormatException on jsonDecode).
-    final uri = Uri.parse(
-      'https://data.transportation.gov/resource/vhwz-raag.json'
-      '?\$select=crossingid,latitude,longitude,street,revisiondate'
-      "&\$where=crossingposition='At Grade'"
-      " AND latitude NOT LIKE '%25%C2%B0%25'"
-      " AND latitude NOT LIKE '%25O%25'"
-      " AND latitude NOT LIKE '%25o%25'"
-      " AND longitude NOT LIKE '%25%C2%B0%25'"
-      " AND longitude NOT LIKE '%25O%25'"
-      " AND longitude NOT LIKE '%25o%25'"
-      ' AND latitude::number>${latMin.toStringAsFixed(6)}'
-      ' AND latitude::number<${latMax.toStringAsFixed(6)}'
-      ' AND longitude::number>${lngMin.toStringAsFixed(6)}'
-      ' AND longitude::number<${lngMax.toStringAsFixed(6)}'
-      // Socrata reliably caps response at ~1024 rows regardless of $limit
-      // and drops the connection mid-row beyond that, causing
-      // FormatException on jsonDecode. Cap at 1000 — a 25 km bbox has
-      // well under that many at-grade crossings for any US region.
-      '&\$limit=1000',
-    );
-
     try {
       final headers = appToken.isNotEmpty && appToken != 'YOUR_TOKEN_HERE'
           ? {'X-App-Token': appToken}
           : <String, String>{};
 
-      final res = await http.get(uri, headers: headers);
+      final data = <dynamic>[];
+      int? failedStatus;
+      for (var page = 0; page < kFraMaxPages; page++) {
+        final res = await http.get(
+            fraCrossingsUri(pos.latitude, pos.longitude, page: page),
+            headers: headers);
+        if (res.statusCode != 200) {
+          failedStatus = res.statusCode;
+          break;
+        }
+        final rows = json.decode(res.body) as List<dynamic>;
+        data.addAll(rows);
+        if (rows.length < kFraPageSize) break;
+      }
 
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body) as List<dynamic>;
+      if (failedStatus == null) {
         final Map<String, TransportLocation> uniqueLocations = {};
 
         for (final e in data) {
@@ -3213,7 +3189,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         nearbyLocations.assignAll(uniqueLocations.values.toList());
         log_print.log(
             '✅ FRA: ${nearbyLocations.length} crossings loaded '
-            '(bbox ±${delta}° around ${pos.latitude.toStringAsFixed(4)}, '
+            '(around ${pos.latitude.toStringAsFixed(4)}, '
             '${pos.longitude.toStringAsFixed(4)})');
 
         // Persist to SharedPreferences for background isolate
@@ -3235,8 +3211,8 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
           force: true,
         ));
       } else {
-        log_print.log('❌ FRA fetch failed: ${res.statusCode}');
-        errorMessage.value = 'Failed to fetch crossing data (${res.statusCode})';
+        log_print.log('❌ FRA fetch failed: $failedStatus');
+        errorMessage.value = 'Failed to fetch crossing data ($failedStatus)';
       }
     } catch (e) {
       log_print.log('❌ FRA fetch error: $e');

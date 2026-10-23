@@ -291,59 +291,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     final lat = userPosition.value!.latitude;
     final lng = userPosition.value!.longitude;
 
-    final Map<String, LatLngBounds> stateBounds = {
-      'AL': LatLngBounds(LatLng(30.2, -88.5), LatLng(35.0, -84.9)),
-      'AK': LatLngBounds(LatLng(51.2, -179.1), LatLng(71.5, -129.9)),
-      'AZ': LatLngBounds(LatLng(31.3, -114.8), LatLng(37.0, -109.0)),
-      'AR': LatLngBounds(LatLng(33.0, -94.6), LatLng(36.5, -89.6)),
-      'CA': LatLngBounds(LatLng(32.5, -124.4), LatLng(42.0, -114.1)),
-      'CO': LatLngBounds(LatLng(36.9, -109.1), LatLng(41.0, -102.0)),
-      'CT': LatLngBounds(LatLng(40.9, -73.7), LatLng(42.1, -71.8)),
-      'DE': LatLngBounds(LatLng(38.4, -75.8), LatLng(39.8, -75.0)),
-      'FL': LatLngBounds(LatLng(24.3, -87.7), LatLng(31.1, -79.8)),
-      'GA': LatLngBounds(LatLng(30.3, -85.6), LatLng(35.0, -80.8)),
-      'HI': LatLngBounds(LatLng(18.9, -160.3), LatLng(22.4, -154.8)),
-      'ID': LatLngBounds(LatLng(42.0, -117.3), LatLng(49.0, -111.0)),
-      'IL': LatLngBounds(LatLng(36.9, -91.5), LatLng(42.5, -87.0)),
-      'IN': LatLngBounds(LatLng(37.8, -88.1), LatLng(41.8, -84.7)),
-      'IA': LatLngBounds(LatLng(40.3, -96.6), LatLng(43.5, -90.1)),
-      'KS': LatLngBounds(LatLng(36.9, -102.1), LatLng(40.0, -94.6)),
-      'KY': LatLngBounds(LatLng(36.5, -89.6), LatLng(39.1, -81.9)),
-      'LA': LatLngBounds(LatLng(28.9, -94.0), LatLng(33.0, -88.8)),
-      'ME': LatLngBounds(LatLng(43.0, -71.1), LatLng(47.5, -66.8)),
-      'MD': LatLngBounds(LatLng(37.9, -79.5), LatLng(39.8, -75.0)),
-      'MA': LatLngBounds(LatLng(41.18, -73.5), LatLng(42.88, -69.9)),
-      'MI': LatLngBounds(LatLng(41.7, -90.4), LatLng(48.3, -82.4)),
-      'MN': LatLngBounds(LatLng(43.5, -97.3), LatLng(49.3, -89.5)),
-      'MS': LatLngBounds(LatLng(30.2, -91.6), LatLng(35.0, -88.1)),
-      'MO': LatLngBounds(LatLng(36.0, -95.8), LatLng(40.6, -89.1)),
-      'MT': LatLngBounds(LatLng(44.4, -116.1), LatLng(49.0, -104.0)),
-      'NE': LatLngBounds(LatLng(40.0, -104.1), LatLng(43.0, -95.3)),
-      'NV': LatLngBounds(LatLng(35.0, -120.0), LatLng(42.0, -114.0)),
-      'NH': LatLngBounds(LatLng(42.7, -72.6), LatLng(45.3, -70.6)),
-      'NJ': LatLngBounds(LatLng(38.9, -75.6), LatLng(41.4, -73.9)),
-      'NM': LatLngBounds(LatLng(31.3, -109.1), LatLng(37.0, -103.0)),
-      'NY': LatLngBounds(LatLng(40.4, -79.8), LatLng(45.0, -71.8)),
-      'NC': LatLngBounds(LatLng(33.8, -84.3), LatLng(36.6, -75.4)),
-      'ND': LatLngBounds(LatLng(45.9, -104.1), LatLng(49.0, -96.5)),
-      'OH': LatLngBounds(LatLng(38.2, -84.8), LatLng(41.98, -80.5)),
-      'OK': LatLngBounds(LatLng(33.6, -103.0), LatLng(37.0, -94.4)),
-      'OR': LatLngBounds(LatLng(41.9, -124.6), LatLng(46.3, -116.5)),
-      'PA': LatLngBounds(LatLng(39.7, -80.6), LatLng(42.5, -74.6)),
-      'RI': LatLngBounds(LatLng(41.1, -71.9), LatLng(42.0, -71.1)),
-      'SC': LatLngBounds(LatLng(32.0, -83.4), LatLng(35.2, -78.5)),
-      'SD': LatLngBounds(LatLng(42.5, -104.1), LatLng(45.9, -96.4)),
-      'TN': LatLngBounds(LatLng(35.0, -90.3), LatLng(36.7, -81.6)),
-      'TX': LatLngBounds(LatLng(25.8, -106.6), LatLng(36.5, -93.5)),
-      'UT': LatLngBounds(LatLng(37.0, -114.1), LatLng(42.0, -109.0)),
-      'VT': LatLngBounds(LatLng(42.7, -73.4), LatLng(45.0, -71.5)),
-      'VA': LatLngBounds(LatLng(36.5, -83.7), LatLng(39.5, -75.2)),
-      'WA': LatLngBounds(LatLng(45.5, -124.8), LatLng(49.0, -116.9)),
-      'WV': LatLngBounds(LatLng(37.2, -82.6), LatLng(40.6, -77.7)),
-      'WI': LatLngBounds(LatLng(42.4, -92.9), LatLng(47.3, -86.8)),
-      'WY': LatLngBounds(LatLng(41.0, -111.1), LatLng(45.0, -104.0)),
-      'DC': LatLngBounds(LatLng(38.79, -77.12), LatLng(38.995, -76.91)),
-    };
+    final stateBounds = _stateBounds;
 
     for (final entry in stateBounds.entries) {
       final bounds = entry.value;
@@ -434,59 +382,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     final lat = userPosition.value!.latitude;
     final lng = userPosition.value!.longitude;
 
-    final Map<String, LatLngBounds> stateBounds = {
-      'AL': LatLngBounds(LatLng(30.2, -88.5), LatLng(35.0, -84.9)),
-      'AK': LatLngBounds(LatLng(51.2, -179.1), LatLng(71.5, -129.9)),
-      'AZ': LatLngBounds(LatLng(31.3, -114.8), LatLng(37.0, -109.0)),
-      'AR': LatLngBounds(LatLng(33.0, -94.6), LatLng(36.5, -89.6)),
-      'CA': LatLngBounds(LatLng(32.5, -124.4), LatLng(42.0, -114.1)),
-      'CO': LatLngBounds(LatLng(36.9, -109.1), LatLng(41.0, -102.0)),
-      'CT': LatLngBounds(LatLng(40.9, -73.7), LatLng(42.1, -71.8)),
-      'DE': LatLngBounds(LatLng(38.4, -75.8), LatLng(39.8, -75.0)),
-      'FL': LatLngBounds(LatLng(24.3, -87.7), LatLng(31.1, -79.8)),
-      'GA': LatLngBounds(LatLng(30.3, -85.6), LatLng(35.0, -80.8)),
-      'HI': LatLngBounds(LatLng(18.9, -160.3), LatLng(22.4, -154.8)),
-      'ID': LatLngBounds(LatLng(42.0, -117.3), LatLng(49.0, -111.0)),
-      'IL': LatLngBounds(LatLng(36.9, -91.5), LatLng(42.5, -87.0)),
-      'IN': LatLngBounds(LatLng(37.8, -88.1), LatLng(41.8, -84.7)),
-      'IA': LatLngBounds(LatLng(40.3, -96.6), LatLng(43.5, -90.1)),
-      'KS': LatLngBounds(LatLng(36.9, -102.1), LatLng(40.0, -94.6)),
-      'KY': LatLngBounds(LatLng(36.5, -89.6), LatLng(39.1, -81.9)),
-      'LA': LatLngBounds(LatLng(28.9, -94.0), LatLng(33.0, -88.8)),
-      'ME': LatLngBounds(LatLng(43.0, -71.1), LatLng(47.5, -66.8)),
-      'MD': LatLngBounds(LatLng(37.9, -79.5), LatLng(39.8, -75.0)),
-      'MA': LatLngBounds(LatLng(41.18, -73.5), LatLng(42.88, -69.9)),
-      'MI': LatLngBounds(LatLng(41.7, -90.4), LatLng(48.3, -82.4)),
-      'MN': LatLngBounds(LatLng(43.5, -97.3), LatLng(49.3, -89.5)),
-      'MS': LatLngBounds(LatLng(30.2, -91.6), LatLng(35.0, -88.1)),
-      'MO': LatLngBounds(LatLng(36.0, -95.8), LatLng(40.6, -89.1)),
-      'MT': LatLngBounds(LatLng(44.4, -116.1), LatLng(49.0, -104.0)),
-      'NE': LatLngBounds(LatLng(40.0, -104.1), LatLng(43.0, -95.3)),
-      'NV': LatLngBounds(LatLng(35.0, -120.0), LatLng(42.0, -114.0)),
-      'NH': LatLngBounds(LatLng(42.7, -72.6), LatLng(45.3, -70.6)),
-      'NJ': LatLngBounds(LatLng(38.9, -75.6), LatLng(41.4, -73.9)),
-      'NM': LatLngBounds(LatLng(31.3, -109.1), LatLng(37.0, -103.0)),
-      'NY': LatLngBounds(LatLng(40.4, -79.8), LatLng(45.0, -71.8)),
-      'NC': LatLngBounds(LatLng(33.8, -84.3), LatLng(36.6, -75.4)),
-      'ND': LatLngBounds(LatLng(45.9, -104.1), LatLng(49.0, -96.5)),
-      'OH': LatLngBounds(LatLng(38.2, -84.8), LatLng(41.98, -80.5)),
-      'OK': LatLngBounds(LatLng(33.6, -103.0), LatLng(37.0, -94.4)),
-      'OR': LatLngBounds(LatLng(41.9, -124.6), LatLng(46.3, -116.5)),
-      'PA': LatLngBounds(LatLng(39.7, -80.6), LatLng(42.5, -74.6)),
-      'RI': LatLngBounds(LatLng(41.1, -71.9), LatLng(42.0, -71.1)),
-      'SC': LatLngBounds(LatLng(32.0, -83.4), LatLng(35.2, -78.5)),
-      'SD': LatLngBounds(LatLng(42.5, -104.1), LatLng(45.9, -96.4)),
-      'TN': LatLngBounds(LatLng(35.0, -90.3), LatLng(36.7, -81.6)),
-      'TX': LatLngBounds(LatLng(25.8, -106.6), LatLng(36.5, -93.5)),
-      'UT': LatLngBounds(LatLng(37.0, -114.1), LatLng(42.0, -109.0)),
-      'VT': LatLngBounds(LatLng(42.7, -73.4), LatLng(45.0, -71.5)),
-      'VA': LatLngBounds(LatLng(36.5, -83.7), LatLng(39.5, -75.2)),
-      'WA': LatLngBounds(LatLng(45.5, -124.8), LatLng(49.0, -116.9)),
-      'WV': LatLngBounds(LatLng(37.2, -82.6), LatLng(40.6, -77.7)),
-      'WI': LatLngBounds(LatLng(42.4, -92.9), LatLng(47.3, -86.8)),
-      'WY': LatLngBounds(LatLng(41.0, -111.1), LatLng(45.0, -104.0)),
-      'DC': LatLngBounds(LatLng(38.79, -77.12), LatLng(38.995, -76.91)),
-    };
+    final stateBounds = _stateBounds;
 
     // 🧭 Step 2: Find which state user is in
     String? currentStateCode;
@@ -641,19 +537,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
   //     },
   //   );
   // }
-  // ✅ COMPLETELY REWRITTEN download method
-  Future<void> downloadOfflineMapForState(String stateCode, {bool resume = false}) async {
-    if (isDownloadingOfflineMap.value) {
-      Get.snackbar(
-        "Download in Progress",
-        "Please wait for the current download to complete",
-        backgroundColor: Colors.orange,
-        colorText: Colors.white,
-      );
-      return;
-    }
-
-    final Map<String, LatLngBounds> stateBounds = {
+  static final Map<String, LatLngBounds> _stateBounds = {
       'AL': LatLngBounds(LatLng(30.2, -88.5), LatLng(35.0, -84.9)),
       'AK': LatLngBounds(LatLng(51.2, -179.1), LatLng(71.5, -129.9)),
       'AZ': LatLngBounds(LatLng(31.3, -114.8), LatLng(37.0, -109.0)),
@@ -705,13 +589,46 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
       'WI': LatLngBounds(LatLng(42.4, -92.9), LatLng(47.3, -86.8)),
       'WY': LatLngBounds(LatLng(41.0, -111.1), LatLng(45.0, -104.0)),
       'DC': LatLngBounds(LatLng(38.79, -77.12), LatLng(38.995, -76.91)),
-    };
+  };
+
+  /// Saves [stateCode]'s whole crossing list so alerts keep working where
+  /// there is no signal. Failures are logged only — the next app start
+  /// retries any downloaded state that still has no list.
+  Future<void> _cacheStateCrossings(String stateCode) async {
+    final b = _stateBounds[stateCode];
+    if (b == null) return;
+    try {
+      final n = await OfflineCrossings.download(
+          stateCode, b.south, b.north, b.west, b.east);
+      await TestLogger.log('✅ offline crossings: $n for $stateCode',
+          tag: 'MAIN');
+    } catch (e) {
+      await TestLogger.log('❌ offline crossings for $stateCode: $e',
+          tag: 'MAIN');
+    }
+  }
+
+  // ✅ COMPLETELY REWRITTEN download method
+  Future<void> downloadOfflineMapForState(String stateCode, {bool resume = false}) async {
+    if (isDownloadingOfflineMap.value) {
+      Get.snackbar(
+        "Download in Progress",
+        "Please wait for the current download to complete",
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    final stateBounds = _stateBounds;
 
     final bounds = stateBounds[stateCode];
     if (bounds == null) {
       Get.snackbar("Error", "Invalid state code");
       return;
     }
+
+    unawaited(_cacheStateCrossings(stateCode));
 
     final store = FMTCStore('offline_tiles_$stateCode');
 
@@ -1588,6 +1505,14 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         } catch (_) {}
       }
       downloadedStates.assignAll(found);
+      // Maps downloaded before crossings were saved alongside them.
+      unawaited(() async {
+        for (final st in found) {
+          if (!await OfflineCrossings.has(st.code)) {
+            await _cacheStateCrossings(st.code);
+          }
+        }
+      }());
       // hasOfflineMap mirrors "anything available", regardless of which
       // state the user is currently standing in.
       if (found.isNotEmpty) hasOfflineMap.value = true;

@@ -573,6 +573,21 @@ class LocationTaskHandler extends TaskHandler {
       if (crossings.isEmpty || forceRefetch) {
         crossings = await _fetchAndCacheCrossings(position);
         if (crossings.isEmpty) {
+          // No signal (or throttled): fall back to the whole-state list
+          // saved with the offline map.
+          crossings = await OfflineCrossings.near(
+              position.latitude, position.longitude);
+          if (crossings.isNotEmpty) {
+            await CrossingCacheService.saveCrossings(crossings);
+            await prefs.setDouble('bg_last_fetch_lat', position.latitude);
+            await prefs.setDouble('bg_last_fetch_lng', position.longitude);
+            await TestLogger.log(
+                '[$source] loaded ${crossings.length} crossings from '
+                'offline state cache',
+                tag: 'BG');
+          }
+        }
+        if (crossings.isEmpty) {
           await TestLogger.log('[$source] no cached crossings', tag: 'BG');
           return;
         }

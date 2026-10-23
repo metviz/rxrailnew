@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'dart:developer' as log;
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Rows per FRA page. Socrata drops the connection mid-row beyond ~1024,
@@ -11,7 +14,15 @@ const int kFraPageSize = 1000;
 const int kFraMaxPages = 5;
 
 /// At-grade FRA crossings within ±0.225° (~25 km) of [lat],[lng]: page
-/// [page] of the result, grouped by crossing + location.
+/// [page] of the result. See [fraCrossingsInBox].
+Uri fraCrossingsUri(double lat, double lng, {int page = 0}) {
+  const delta = 0.225;
+  return fraCrossingsInBox(
+      lat - delta, lat + delta, lng - delta, lng + delta, page: page);
+}
+
+/// At-grade FRA crossings inside the box: page [page] of the result,
+/// grouped by crossing + location.
 ///
 /// Raw rows repeat each crossing ~10× (one per inventory revision), so an
 /// ungrouped 1000-row page held only ~270 of the 324 crossings around
@@ -23,8 +34,9 @@ const int kFraMaxPages = 5;
 /// 44.974607') fail the cast for the whole query (HTTP 400, depending on
 /// the plan) unless filtered first. URL encoding: '%' → %25, '°' → %C2%B0.
 /// Uri.parse keeps '$' unencoded, which Uri.https would not.
-Uri fraCrossingsUri(double lat, double lng, {int page = 0}) {
-  const delta = 0.225;
+Uri fraCrossingsInBox(
+    double minLat, double maxLat, double minLng, double maxLng,
+    {int page = 0}) {
   const bad = ['%C2%B0', 'O', 'o', "''"];
   final filters = [
     for (final col in ['latitude', 'longitude'])
@@ -36,10 +48,10 @@ Uri fraCrossingsUri(double lat, double lng, {int page = 0}) {
     'max(street) AS street,max(revisiondate) AS revisiondate'
     "&\$where=crossingposition='At Grade'"
     '$filters'
-    ' AND latitude::number>${(lat - delta).toStringAsFixed(6)}'
-    ' AND latitude::number<${(lat + delta).toStringAsFixed(6)}'
-    ' AND longitude::number>${(lng - delta).toStringAsFixed(6)}'
-    ' AND longitude::number<${(lng + delta).toStringAsFixed(6)}'
+    ' AND latitude::number>${minLat.toStringAsFixed(6)}'
+    ' AND latitude::number<${maxLat.toStringAsFixed(6)}'
+    ' AND longitude::number>${minLng.toStringAsFixed(6)}'
+    ' AND longitude::number<${maxLng.toStringAsFixed(6)}'
     '&\$group=crossingid,latitude,longitude'
     '&\$order=crossingid,latitude,longitude'
     '&\$limit=$kFraPageSize&\$offset=${page * kFraPageSize}',
@@ -95,5 +107,78 @@ class CrossingCacheService {
       log.log('❌ CrossingCacheService.loadWarningSettings error: $e');
       return (enabled: true, distanceMeters: 200.0);
     }
+  }
+}
+
+/// Whole-state crossing lists saved beside the offline map, so alerts keep
+/// working where there is no signal to fetch the 25 km list. One JSON file
+/// per state (~2 MB for NC's ~25k grouped rows) in app support storage,
+/// readable from the background isolate.
+class OfflineCrossings {
+  static Future<File> _file(String state) async =>
+      File('${(await getApplicationSupportDirectory()).path}/crossings_$state.json');
+
+  static Future<bool> has(String state) async => (await _file(state)).exists();
+
+  /// Fetches every crossing in the state's bounding box and saves it.
+  /// Returns the row count. Throws on HTTP failure; a partial download
+  /// never replaces a complete file.
+  static Future<int> download(String state, double minLat, double maxLat,
+      double minLng, double maxLng) async {
+    final rows = <Map<String, String>>[];
+    // 200 pages = 200k rows; TX, the largest state, is ~60k.
+    for (var page = 0; page < 200; page++) {
+      final res = await http
+          .get(fraCrossingsInBox(minLat, maxLat, minLng, maxLng, page: page))
+          .timeout(const Duration(seconds: 60));
+      if (res.statusCode != 200) {
+        throw HttpException('FRA ${res.statusCode} on page $page');
+      }
+      final data = jsonDecode(res.body) as List<dynamic>;
+      for (final e in data) {
+        final id = (e['crossingid'] as String? ?? '').trim();
+        if (id.isEmpty || e['latitude'] == null || e['longitude'] == null) {
+          continue;
+        }
+        rows.add({
+          'crossingid': id,
+          'latitude': e['latitude'].toString(),
+          'longitude': e['longitude'].toString(),
+          'street': (e['street'] as String?) ?? 'Railway Crossing',
+        });
+      }
+      if (data.length < kFraPageSize) break;
+    }
+    final file = await _file(state);
+    final tmp = File('${file.path}.tmp');
+    await tmp.writeAsString(jsonEncode(rows), flush: true);
+    await tmp.rename(file.path);
+    return rows.length;
+  }
+
+  /// Saved crossings within ±0.225° (~25 km) of [lat],[lng], across every
+  /// downloaded state (boxes of neighbouring states overlap, so keyed by
+  /// id + location). Empty when none are saved or on error.
+  static Future<List<Map<String, dynamic>>> near(double lat, double lng) async {
+    const delta = 0.225;
+    final out = <String, Map<String, dynamic>>{};
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final files = dir.listSync().whereType<File>().where((f) =>
+          f.path.contains('/crossings_') && f.path.endsWith('.json'));
+      for (final f in files) {
+        for (final e in jsonDecode(await f.readAsString()) as List<dynamic>) {
+          final m = e as Map<String, dynamic>;
+          final la = double.tryParse(m['latitude'] as String? ?? '') ?? 0;
+          final lo = double.tryParse(m['longitude'] as String? ?? '') ?? 0;
+          if ((la - lat).abs() < delta && (lo - lng).abs() < delta) {
+            out['${m['crossingid']}@$la,$lo'] = m;
+          }
+        }
+      }
+    } catch (e) {
+      log.log('❌ OfflineCrossings.near error: $e');
+    }
+    return out.values.toList();
   }
 }

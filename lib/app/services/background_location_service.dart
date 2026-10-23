@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart'
+    hide NotificationVisibility;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:geolocator/geolocator.dart';
@@ -296,6 +297,10 @@ Future<int> _showCrossingAlert(
     importance: Importance.high,
     priority: Priority.high,
     audioAttributesUsage: AudioAttributesUsage.alarm,
+    // DND / Samsung Driving & Sleep modes let alarm-category notifications
+    // through by default; uncategorised ones are silenced.
+    category: AndroidNotificationCategory.alarm,
+    visibility: NotificationVisibility.public,
     enableLights: true,
     enableVibration: vibrationEnabled,
     playSound: soundEnabled,

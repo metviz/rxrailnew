@@ -249,6 +249,50 @@ bool isCrossingAhead(Position position, double lat, double lng) {
   return diff.abs() <= _kAheadHalfAngle;
 }
 
+/// Within this distance of a crossing already alerted this visit, another
+/// crossing counts as the same alert: FRA duplicate rows and adjacent tracks
+/// (S26 10-22: 244168T sits 85 m past 946853A; it alerted at 17 m, 5 s after
+/// the first — noise). Farther apart it is a separate crossing and alerts
+/// as soon as it is in range and ahead, not when it finally becomes nearest.
+const double _kClusterRadius = 150.0;
+
+/// Identity is id + coordinates: FRA reuses some crossing ids for distinct
+/// locations (904436A appears at two spots 1.4 km apart).
+typedef CrossingPoint = ({String key, double lat, double lng});
+typedef InRangeCrossing = ({CrossingPoint c, double distance, bool ahead});
+
+/// Decides this tick's alert. [alerted] holds crossings already alerted (or
+/// absorbed) this visit. Returns the crossing to alert, if any, and every
+/// crossing to mark alerted — the alert itself plus its cluster.
+({InRangeCrossing? alert, List<CrossingPoint> consumed}) pickAlert(
+  List<InRangeCrossing> inRange,
+  Iterable<CrossingPoint> alerted,
+) {
+  bool near(CrossingPoint a, CrossingPoint b) =>
+      _haversineDistanceMeters(a.lat, a.lng, b.lat, b.lng) <= _kClusterRadius;
+
+  final alertedKeys = {for (final a in alerted) a.key};
+  final consumed = <CrossingPoint>[];
+  final fresh = <InRangeCrossing>[];
+  for (final x in inRange) {
+    if (alertedKeys.contains(x.c.key)) continue;
+    if (alerted.any((a) => near(a, x.c))) {
+      consumed.add(x.c);
+    } else {
+      fresh.add(x);
+    }
+  }
+
+  InRangeCrossing? best;
+  for (final x in fresh) {
+    if (x.ahead && (best == null || x.distance < best.distance)) best = x;
+  }
+  if (best != null) {
+    consumed.addAll(fresh.where((x) => near(x.c, best!.c)).map((x) => x.c));
+  }
+  return (alert: best, consumed: consumed);
+}
+
 /// Fire a high-priority crossing alert from within the background isolate.
 Future<int> _showCrossingAlert(
   FlutterLocalNotificationsPlugin plugin,
@@ -327,16 +371,13 @@ void startLocationTracking() {
 class LocationTaskHandler extends TaskHandler {
   StreamSubscription<Position>? _positionStream;
 
-  final Map<String, int> _alertCount = {};
+  // Crossings alerted (or absorbed into an alert's cluster) this visit,
+  // keyed by id@lat,lng. One audible alert per approach: with 2, the GPS
+  // path and the 5-s timer fired the second ~2 s after the first and
+  // Android muted it as a rapid repeat. Departure hysteresis (past
+  // threshold*1.2) removes the entry, so re-passing later re-arms it.
+  final Map<String, CrossingPoint> _alerted = {};
   final Map<String, int> _activeNotifIds = {};
-  // One audible alert per crossing approach. With 2, the GPS path and
-  // the 5-s timer fire the second alert ~2 s after the first; Android
-  // suppresses sound on rapid repeats to the same channel, so the
-  // second alert lands silently in the shade and the user hears only
-  // the first. Departure hysteresis resets the count when the user
-  // moves past threshold*1.2, so re-passing the same crossing later
-  // re-arms the alert.
-  static const int _maxAlertsPerVisit = 1;
 
   final FlutterLocalNotificationsPlugin _notifPlugin =
       FlutterLocalNotificationsPlugin();
@@ -545,10 +586,8 @@ class LocationTaskHandler extends TaskHandler {
       double nearestDist = double.infinity;
       String nearestId = '';
       String nearestStreet = '';
-      final List<String> inRange = [];
-      String? bestId;
-      String? bestStreet;
-      double bestDist = double.infinity;
+      final List<InRangeCrossing> inRange = [];
+      final Map<String, String> streets = {};
       int gated = 0;
 
       for (final crossing in crossings) {
@@ -573,66 +612,60 @@ class LocationTaskHandler extends TaskHandler {
         // Hysteresis: keep the notification alive until the user is past
         // 1.2x the alert threshold. 2x kept the alert lingering ~30 s past
         // the crossing at highway speed; 1.2x clears it within ~5 s.
-        if (distance <= threshold * 1.2) stillNear.add(id);
+        final key = '$id@$lat,$lng';
+        if (distance <= threshold * 1.2) stillNear.add(key);
 
         if (distance <= threshold) {
-          inRange.add(id);
           // Heading gate: at driving speed only crossings roughly ahead
           // count. Rejects crossings on a parallel track/spur beside the
           // road (S26 logs: alerts at 173-211m for spurs never crossed).
-          if (!isCrossingAhead(position, lat, lng)) {
-            gated++;
-            continue;
-          }
-          if (distance < bestDist) {
-            bestDist = distance;
-            bestId = id;
-            bestStreet = street;
-          }
+          final ahead = isCrossingAhead(position, lat, lng);
+          if (!ahead) gated++;
+          inRange.add((c: (key: key, lat: lat, lng: lng), distance: distance, ahead: ahead));
+          streets[key] = street;
         }
       }
 
-      // One alert per tick for the nearest crossing ahead; every crossing
-      // in range is consumed so a cluster (duplicate FRA rows, adjacent
-      // pedestrian/private crossings) yields one alert, not three.
-      if (bestId != null) {
-        final count = _alertCount[bestId] ?? 0;
-        if (count < _maxAlertsPerVisit) {
-          for (final id in inRange) {
-            _alertCount[id] = math.max(_alertCount[id] ?? 0, 1);
-          }
-          await TestLogger.log(
-            '[$source] 🔔 ALERT #${count + 1} — $bestStreet ${bestDist.round()}m '
-            '(acc=${position.accuracy.round()}m spd=${position.speed.toStringAsFixed(1)}m/s '
-            'hdg=${position.heading.round()} consumed=${inRange.length})',
-            tag: 'BG',
-          );
-          if (_notifInitialized) {
-            final notifId = await _showCrossingAlert(
-                _notifPlugin, bestId, bestStreet!, bestDist);
-            _activeNotifIds[bestId] = notifId;
-            await _speakAlert(bestStreet, bestDist, source);
-          } else {
-            await TestLogger.log(
-              '[$source] ⚠️ alert SUPPRESSED: _notifInitialized=false',
-              tag: 'BG',
-            );
-          }
+      // One alert per cluster (duplicate FRA rows, adjacent tracks):
+      // pickAlert absorbs crossings near one already alerted.
+      final pick = pickAlert(inRange, _alerted.values);
+      for (final c in pick.consumed) {
+        _alerted[c.key] = c;
+      }
+      final best = pick.alert;
+      if (best != null) {
+        final bestStreet = streets[best.c.key]!;
+        await TestLogger.log(
+          '[$source] 🔔 ALERT — $bestStreet ${best.distance.round()}m '
+          '(acc=${position.accuracy.round()}m spd=${position.speed.toStringAsFixed(1)}m/s '
+          'hdg=${position.heading.round()} consumed=${pick.consumed.length})',
+          tag: 'BG',
+        );
+        if (_notifInitialized) {
+          final notifId = await _showCrossingAlert(
+              _notifPlugin, best.c.key, bestStreet, best.distance);
+          _activeNotifIds[best.c.key] = notifId;
+          await _speakAlert(bestStreet, best.distance, source);
         } else {
           await TestLogger.log(
-            '[$source] 🔕 alert capped (${_maxAlertsPerVisit}/visit) — $bestStreet '
-            '${bestDist.round()}m',
+            '[$source] ⚠️ alert SUPPRESSED: _notifInitialized=false',
             tag: 'BG',
           );
         }
+      } else if (pick.consumed.isNotEmpty) {
+        await TestLogger.log(
+          '[$source] 🔕 clustered ${pick.consumed.length} crossing(s) '
+          'with an alert already given',
+          tag: 'BG',
+        );
       }
 
       // 5. Hysteresis — cancel notifications when user departs
       final departed =
-          _alertCount.keys.where((id) => !stillNear.contains(id)).toList();
+          _alerted.keys.where((id) => !stillNear.contains(id)).toList();
       for (final id in departed) {
         final notifId = _activeNotifIds.remove(id);
-        _alertCount.remove(id);
+        _alerted.remove(id);
         if (notifId != null) {
           try {
             await _notifPlugin.cancel(notifId);

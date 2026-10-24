@@ -112,20 +112,30 @@ class CrossingCacheService {
 
 /// Whole-state crossing lists saved beside the offline map, so alerts keep
 /// working where there is no signal to fetch the 25 km list. One JSON file
-/// per state (~2 MB for NC's ~25k grouped rows) in app support storage,
+/// per state (NC: ~32k rows, 1.5 MB) in app support storage,
 /// readable from the background isolate.
 class OfflineCrossings {
   static Future<File> _file(String state) async =>
       File('${(await getApplicationSupportDirectory()).path}/crossings_$state.json');
 
-  static Future<bool> has(String state) async => (await _file(state)).exists();
+  /// True when a compact file is saved. Files from before compaction
+  /// (a list of maps, ~3× bigger) count as missing so they get replaced.
+  static Future<bool> has(String state) async {
+    final f = await _file(state);
+    if (!await f.exists()) return false;
+    final head = await f.openRead(0, 2).transform(utf8.decoder).join();
+    return head != '[{';
+  }
 
   /// Fetches every crossing in the state's bounding box and saves it.
   /// Returns the row count. Throws on HTTP failure; a partial download
   /// never replaces a complete file.
   static Future<int> download(String state, double minLat, double maxLat,
       double minLng, double maxLng) async {
-    final rows = <Map<String, String>>[];
+    // FRA writes one point several ways (35.741371 vs 35.7413710, or a
+    // last digit off): NC has 40.5k rows. Rounding to 5 decimals
+    // (~1 m) leaves 32k; stored as [id, lat, lng, street], 4 MB -> 1.5 MB.
+    final rows = <String, List<Object>>{};
     // 200 pages = 200k rows; TX, the largest state, is ~60k.
     for (var page = 0; page < 200; page++) {
       final res = await http
@@ -137,21 +147,19 @@ class OfflineCrossings {
       final data = jsonDecode(res.body) as List<dynamic>;
       for (final e in data) {
         final id = (e['crossingid'] as String? ?? '').trim();
-        if (id.isEmpty || e['latitude'] == null || e['longitude'] == null) {
-          continue;
-        }
-        rows.add({
-          'crossingid': id,
-          'latitude': e['latitude'].toString(),
-          'longitude': e['longitude'].toString(),
-          'street': (e['street'] as String?) ?? 'Railway Crossing',
-        });
+        final la = double.tryParse('${e['latitude']}');
+        final lo = double.tryParse('${e['longitude']}');
+        if (id.isEmpty || la == null || lo == null) continue;
+        final lat = double.parse(la.toStringAsFixed(5));
+        final lng = double.parse(lo.toStringAsFixed(5));
+        rows.putIfAbsent('$id@$lat,$lng', () =>
+            [id, lat, lng, (e['street'] as String?) ?? 'Railway Crossing']);
       }
       if (data.length < kFraPageSize) break;
     }
     final file = await _file(state);
     final tmp = File('${file.path}.tmp');
-    await tmp.writeAsString(jsonEncode(rows), flush: true);
+    await tmp.writeAsString(jsonEncode(rows.values.toList()), flush: true);
     await tmp.rename(file.path);
     return rows.length;
   }
@@ -168,7 +176,11 @@ class OfflineCrossings {
           f.path.contains('/crossings_') && f.path.endsWith('.json'));
       for (final f in files) {
         for (final e in jsonDecode(await f.readAsString()) as List<dynamic>) {
-          final m = e as Map<String, dynamic>;
+          // Compact [id, lat, lng, street]; files saved before that hold maps.
+          final m = e is List
+              ? {'crossingid': e[0], 'latitude': '${e[1]}',
+                 'longitude': '${e[2]}', 'street': e[3]}
+              : e as Map<String, dynamic>;
           final la = double.tryParse(m['latitude'] as String? ?? '') ?? 0;
           final lo = double.tryParse(m['longitude'] as String? ?? '') ?? 0;
           if ((la - lat).abs() < delta && (lo - lng).abs() < delta) {

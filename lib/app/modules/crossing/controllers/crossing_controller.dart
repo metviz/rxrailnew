@@ -593,10 +593,11 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
   /// Saves [stateCode]'s whole crossing list so alerts keep working where
   /// there is no signal. Failures are logged only — the next app start
-  /// retries any downloaded state that still has no list.
+  /// retries any downloaded state that still has no list. One download
+  /// per state at a time: the state scan reruns on every refresh.
   Future<void> _cacheStateCrossings(String stateCode) async {
     final b = _stateBounds[stateCode];
-    if (b == null) return;
+    if (b == null || !_crossingDownloads.add(stateCode)) return;
     try {
       final n = await OfflineCrossings.download(
           stateCode, b.south, b.north, b.west, b.east);
@@ -605,8 +606,12 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     } catch (e) {
       await TestLogger.log('❌ offline crossings for $stateCode: $e',
           tag: 'MAIN');
+    } finally {
+      _crossingDownloads.remove(stateCode);
     }
   }
+
+  final Set<String> _crossingDownloads = {};
 
   // ✅ COMPLETELY REWRITTEN download method
   Future<void> downloadOfflineMapForState(String stateCode, {bool resume = false}) async {

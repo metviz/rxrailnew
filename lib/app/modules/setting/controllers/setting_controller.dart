@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../services/crash_hotspots.dart';
 import '../../../services/test_logger.dart';
 import '../../crossing/controllers/crossing_controller.dart';
 
@@ -13,6 +14,9 @@ class SettingController extends GetxController {
   // Warnings Section
   final RxBool isWarningsEnabled = true.obs;
   final RxDouble warningDistance = 200.0.obs; // in meters
+  final RxBool isCrashHotspotsEnabled = false.obs;
+  /// Hotspots to draw on the map; empty while the toggle is off.
+  final RxList<Hotspot> crashHotspots = <Hotspot>[].obs;
 
   // Warning Method Section
   final RxBool isWarningSoundEnabled = true.obs;
@@ -46,6 +50,9 @@ class SettingController extends GetxController {
     final prefs = await SharedPreferences.getInstance();
     isWarningsEnabled.value = prefs.getBool('isWarningsEnabled') ?? true;
     warningDistance.value = (prefs.getDouble('warningDistance') ?? 200.0).clamp(100.0, 500.0);
+    isCrashHotspotsEnabled.value =
+        prefs.getBool(kCrashHotspotsEnabledKey) ?? false;
+    await _syncCrashHotspots();
     isWarningSoundEnabled.value = prefs.getBool('isWarningSoundEnabled') ?? true;
     isVibrationEnabled.value = prefs.getBool('isVibrationEnabled') ?? true;
     distanceUnit.value = prefs.getString('distanceUnit') ?? 'miles';
@@ -55,6 +62,7 @@ class SettingController extends GetxController {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isWarningsEnabled', isWarningsEnabled.value);
     await prefs.setDouble('warningDistance', warningDistance.value);
+    await prefs.setBool(kCrashHotspotsEnabledKey, isCrashHotspotsEnabled.value);
     await prefs.setBool('isWarningSoundEnabled', isWarningSoundEnabled.value);
     await prefs.setBool('isVibrationEnabled', isVibrationEnabled.value);
     await prefs.setString('distanceUnit', distanceUnit.value);
@@ -136,6 +144,22 @@ class SettingController extends GetxController {
       isWarningSoundEnabled.value = false;
       isVibrationEnabled.value = false;
     }
+    _savePreferences();
+  }
+
+  Future<void> _syncCrashHotspots() async {
+    try {
+      crashHotspots.value = isCrashHotspotsEnabled.value
+          ? await CrashHotspots.load()
+          : const [];
+    } catch (e) {
+      await TestLogger.log('⚠️ crash hotspots failed to load: $e', tag: 'UI');
+    }
+  }
+
+  void toggleCrashHotspots(bool value) {
+    isCrashHotspotsEnabled.value = value;
+    _syncCrashHotspots();
     _savePreferences();
   }
 

@@ -26,6 +26,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:workmanager/workmanager.dart';
 import '../../../notification_service.dart';
 import '../../../services/background_location_service.dart';
+import '../../../services/crash_hotspots.dart';
 import '../../../services/crossing_cache_service.dart';
 import '../../../services/geofence_safety_net_service.dart';
 import '../../../routes/app_pages.dart';
@@ -613,6 +614,24 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
 
   final Set<String> _crossingDownloads = {};
 
+  /// Saves [stateCode]'s crash hotspots alongside its offline map. Same
+  /// contract as [_cacheStateCrossings]: failures are logged and the next
+  /// app start retries.
+  Future<void> _cacheStateHotspots(String stateCode) async {
+    if (!_hotspotDownloads.add(stateCode)) return;
+    try {
+      final n = await CrashHotspots.download(stateCode);
+      await TestLogger.log('✅ crash hotspots: $n for $stateCode', tag: 'MAIN');
+      await settingController.refreshCrashHotspots();
+    } catch (e) {
+      await TestLogger.log('❌ crash hotspots for $stateCode: $e', tag: 'MAIN');
+    } finally {
+      _hotspotDownloads.remove(stateCode);
+    }
+  }
+
+  final Set<String> _hotspotDownloads = {};
+
   // ✅ COMPLETELY REWRITTEN download method
   Future<void> downloadOfflineMapForState(String stateCode, {bool resume = false}) async {
     if (isDownloadingOfflineMap.value) {
@@ -634,6 +653,7 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
     }
 
     unawaited(_cacheStateCrossings(stateCode));
+    unawaited(_cacheStateHotspots(stateCode));
 
     final store = FMTCStore('offline_tiles_$stateCode');
 
@@ -1515,6 +1535,9 @@ class CrossingController extends GetxController with WidgetsBindingObserver {
         for (final st in found) {
           if (!await OfflineCrossings.has(st.code)) {
             await _cacheStateCrossings(st.code);
+          }
+          if (!await CrashHotspots.has(st.code)) {
+            await _cacheStateHotspots(st.code);
           }
         }
       }());

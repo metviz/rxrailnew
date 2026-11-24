@@ -57,6 +57,36 @@ void main() {
         glenwood);
   });
 
+  test('every published state file parses and names its roads', () {
+    final files = Directory('hotspots').listSync().whereType<File>().toList();
+    expect(files.length, 51);
+    for (final f in files) {
+      final spots = parseHotspots(f.readAsStringSync());
+      expect(spots.length, greaterThanOrEqualTo(50), reason: f.path);
+      expect(spots.every((h) => h.label.isNotEmpty), isTrue, reason: f.path);
+    }
+  });
+
+  test('a downloaded state replaces the bundled copy of that state', () {
+    const tx = '[[32.7,-96.8,"I-30","s"]]';
+    const ncOld = '[[35.8,-78.6,"Old","j"]]';
+    const ncNew = '[[35.9,-78.7,"New","j"],[35.7,-78.5,"Newer","s"]]';
+    final labels = mergeHotspots({'NC': ncOld}, {'TX': tx, 'NC': ncNew})
+        .map((h) => h.label);
+    expect(labels, unorderedEquals(['I-30', 'New', 'Newer']));
+  });
+
+  test('a corrupt downloaded file is skipped, the rest still load', () {
+    final spots = mergeHotspots(
+        {'NC': '[[35.8,-78.6,"Old","j"]]'}, {'TX': '<html>404', 'NC': '{'});
+    expect(spots.single.label, 'Old');
+  });
+
+  test('state file URL', () {
+    expect(hotspotsUri('TX').toString(),
+        'https://raw.githubusercontent.com/metviz/rxrailnew/main/hotspots/TX.json');
+  });
+
   test('bundled asset parses', () {
     final spots = parseHotspots(
         File('assets/data/crash_hotspots_nc.json').readAsStringSync());

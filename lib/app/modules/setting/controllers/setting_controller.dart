@@ -147,6 +147,9 @@ class SettingController extends GetxController {
     _savePreferences();
   }
 
+  /// Re-reads the map's hotspot list, e.g. after a state download.
+  Future<void> refreshCrashHotspots() => _syncCrashHotspots();
+
   Future<void> _syncCrashHotspots() async {
     try {
       crashHotspots.value = isCrashHotspotsEnabled.value

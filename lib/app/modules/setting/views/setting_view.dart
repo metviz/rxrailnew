@@ -49,6 +49,14 @@ class SettingView extends GetView<SettingController> {
                     SizedBox(height: 20.h),
                     // Warning Distance
                     _buildDistanceSection(),
+                    SizedBox(height: 20.h),
+                    _buildToggleItem(
+                      title: 'Crash hotspots (beta)',
+                      subtitle:
+                          'Advisory notice ahead of high-crash areas in NC',
+                      value: controller.isCrashHotspotsEnabled,
+                      onChanged: controller.toggleCrashHotspots,
+                    ),
                   ],
                 ),
               ),

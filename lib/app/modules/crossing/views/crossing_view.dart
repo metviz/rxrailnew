@@ -522,6 +522,34 @@ class CrossingView extends GetView<CrossingController> {
             ],
           ),
 
+          // Crash hotspots (opt-in), under the crossings and the user.
+          MarkerLayer(
+            markers: [
+              for (final h in controller.settingController.crashHotspots)
+                Marker(
+                  point: LatLng(h.lat, h.lng),
+                  width: 26,
+                  height: 26,
+                  child: Tooltip(
+                    message: 'High-crash area: ${h.label}',
+                    triggerMode: TooltipTriggerMode.tap,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade800,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      child: const Icon(
+                        Icons.car_crash,
+                        size: 15,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+
           // User position marker with proper rotation
           MarkerLayer(
             markers: [

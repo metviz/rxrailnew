@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:developer' as dev;
+import 'package:RXrail/app/services/crash_hotspots.dart';
 import 'package:RXrail/app/services/crossing_cache_service.dart';
 import 'package:RXrail/app/services/background_watchdog_service.dart';
 import 'package:RXrail/app/services/geofence_safety_net_service.dart';
@@ -362,6 +363,31 @@ Future<int> _showCrossingAlert(
   return notifId;
 }
 
+/// Advisory notice for a crash-prone place. Its own default-importance
+/// channel, not the alarm one: a statistical hazard must not sound like a
+/// train, and the user can mute it without touching crossing alerts.
+Future<void> _showHotspotAlert(
+    FlutterLocalNotificationsPlugin plugin, Hotspot spot) async {
+  await plugin.show(
+    hotspotKey(spot).hashCode.abs(),
+    'High-crash area ahead',
+    spot.label,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'crash_hotspot_v1',
+        'Crash Hotspots',
+        channelDescription: 'Advisory notices for crash-prone road locations',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        visibility: NotificationVisibility.public,
+        autoCancel: true,
+        timeoutAfter: 60000,
+        icon: '@mipmap/ic_launcher',
+      ),
+    ),
+  );
+}
+
 // ── Background isolate entry point ─────────────────────────────────────────────
 @pragma('vm:entry-point')
 void startLocationTracking() {
@@ -463,20 +489,52 @@ class LocationTaskHandler extends TaskHandler {
 
   /// Voice alert; honours the warning-sound toggle. Never throws into the
   /// proximity tick — a TTS failure must not cost the visual alert.
+  // Hotspot key -> last alert time; see kHotspotCooldown.
+  final Map<String, DateTime> _hotspotAlerted = {};
+
+  /// Crash-hotspot advisory (opt-in). Independent of the crossing check and
+  /// never throws into it.
+  Future<void> _checkHotspots(Position position, String source) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // The toggle is written by the UI isolate; this isolate's cache
+      // would otherwise keep the value from service start.
+      await prefs.reload();
+      if (!(prefs.getBool(kCrashHotspotsEnabledKey) ?? false)) return;
+      final now = DateTime.now();
+      final spot = pickHotspot(
+          position, await CrashHotspots.load(), _hotspotAlerted, now);
+      if (spot == null) return;
+      _hotspotAlerted[hotspotKey(spot)] = now;
+      await TestLogger.log(
+        '[$source] 🚧 HOTSPOT — ${spot.label} '
+        '(spd=${position.speed.toStringAsFixed(1)}m/s '
+        'hdg=${position.heading.round()})',
+        tag: 'BG',
+      );
+      if (_notifInitialized) await _showHotspotAlert(_notifPlugin, spot);
+      await _speak('High crash area ahead, ${spot.label.toLowerCase()}', source);
+    } catch (e) {
+      await TestLogger.log('[$source] ⚠️ hotspot check failed: $e', tag: 'BG');
+    }
+  }
+
   Future<void> _speakAlert(String street, double distance, String source) async {
+    final where = street.trim().isEmpty || street == 'Railway Crossing'
+        ? ''
+        : ' at ${street.toLowerCase()}';
+    await _speak(
+        'Railway crossing ahead$where, ${distance.round()} meters', source);
+  }
+
+  Future<void> _speak(String text, String source) async {
     final tts = _tts;
     if (tts == null) return;
     final prefs = await SharedPreferences.getInstance();
     if (!(prefs.getBool('isWarningSoundEnabled') ?? true)) return;
-    final where = street.trim().isEmpty || street == 'Railway Crossing'
-        ? ''
-        : ' at ${street.toLowerCase()}';
     try {
       await tts.stop();
-      await tts.speak(
-        'Railway crossing ahead$where, ${distance.round()} meters',
-        focus: true,
-      );
+      await tts.speak(text, focus: true);
     } catch (e) {
       await TestLogger.log('[$source] ⚠️ TTS failed: $e', tag: 'BG');
     }
@@ -542,6 +600,8 @@ class LocationTaskHandler extends TaskHandler {
       // 3. Load settings
       final settings = await CrossingCacheService.loadWarningSettings();
       if (!settings.enabled) return;
+
+      await _checkHotspots(position, source);
 
       // 4. Load crossings — fetch from FRA if cache is empty OR if the
       // user has driven far from the centre of the last bbox fetch.
